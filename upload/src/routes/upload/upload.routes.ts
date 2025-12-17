@@ -1,14 +1,14 @@
 import { Router, Request, Response } from "express";
 import axios from "axios";
 import { generate } from "../../utils";
-import { getAllFiles } from "../../file";
+import { getAllFiles } from "../../utils";
 import simpleGit from "simple-git";
 import path from "path";
 const router = Router();
 import { uploadFile } from "../../aws";
 
-import { client } from './../../redis';
-import { prisma } from "../../prisma";
+import { client } from '../../config/redis';
+import { prisma } from "../../config/prisma";
 
 
 

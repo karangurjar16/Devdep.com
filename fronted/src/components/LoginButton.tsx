@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/config/api";
 
 export default function LoginButton() {
   const handleLogin = () => {
-    window.location.href = "http://localhost:5000/auth/github";
+    window.location.href = `${API_URL}/auth/github`;
   };
 
   return (

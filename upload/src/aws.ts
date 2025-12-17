@@ -18,5 +18,4 @@ export const uploadFile = async (fileName: string, localFilePath: string) => {
         Bucket: "devdep",
         Key: fileName,
     }).promise();
-    console.log(response);
 }
