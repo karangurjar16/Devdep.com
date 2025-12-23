@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { getDeployedProjects, type DeployedProject } from "@/api/github";
+import {
+  getDeployedProjects,
+  getDeployStatus,
+  type DeployedProject,
+  type DeployStatus,
+} from "@/api/github";
 import {
   Card,
   CardHeader,
@@ -23,6 +28,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<DeployedProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
 
   useEffect(() => {
     getDeployedProjects()
@@ -30,6 +36,64 @@ export default function Dashboard() {
       .catch(() => setError("Unable to load deployed projects"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    let isCancelled = false;
+    let intervalId: number | undefined;
+
+    const fetchStatuses = async () => {
+      try {
+        const entries = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const status = await getDeployStatus(project.id);
+              return [project.id, status] as const;
+            } catch {
+              return [project.id, "Unknown" as const];
+            }
+          }),
+        );
+
+        if (!isCancelled) {
+          setStatuses((prev) => ({
+            ...prev,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      } catch {
+        // ignore top-level errors for polling
+      }
+    };
+
+    // initial fetch
+    fetchStatuses();
+    // poll every 5 seconds
+    intervalId = window.setInterval(fetchStatuses, 5000);
+
+    return () => {
+      isCancelled = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [projects]);
+
+  const getStatusVariant = (status?: DeployStatus | "Unknown") => {
+    const value = status?.toLowerCase();
+    switch (value) {
+      case "uploading":
+      case "deploying":
+        return "secondary" as const;
+      case "running":
+        return "default" as const;
+      case "failed":
+        return "destructive" as const;
+      default:
+        return "outline" as const;
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -142,12 +206,15 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 flex-wrap">
-                    <Badge variant="secondary">{project.framework}</Badge>
-                    {project.rootDir !== "./" && (
-                      <Badge variant="outline">Root: {project.rootDir}</Badge>
-                    )}
-                  </div>
+                <div className="flex gap-2 flex-wrap items-center">
+                  <Badge variant="secondary">{project.framework}</Badge>
+                  {project.rootDir !== "./" && (
+                    <Badge variant="outline">Root: {project.rootDir}</Badge>
+                  )}
+                  <Badge variant={getStatusVariant(statuses[project.id])}>
+                    {statuses[project.id] ?? "Loading status..."}
+                  </Badge>
+                </div>
                 </CardContent>
               </Card>
             );

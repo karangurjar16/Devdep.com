@@ -22,6 +22,8 @@ export interface DeployedProject {
   createdAt: string;
 }
 
+export type DeployStatus = "Uploading" | "Deploying" | "Running" | "Failed";
+
 export async function getDeployedProjects(): Promise<DeployedProject[]> {
   const res = await fetch(`${API_URL}/github/deploy`, {
     method: "GET",
@@ -33,4 +35,20 @@ export async function getDeployedProjects(): Promise<DeployedProject[]> {
   }
 
   return res.json();
+}
+
+export async function getDeployStatus(
+  projectId: string,
+): Promise<DeployStatus> {
+  const res = await fetch(`${API_URL}/upload/deploy/status/${projectId}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch deploy status");
+  }
+
+  const data: { status: DeployStatus } = await res.json();
+  return data.status;
 }
