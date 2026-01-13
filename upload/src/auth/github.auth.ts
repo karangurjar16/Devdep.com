@@ -70,11 +70,11 @@ router.get("/github/callback", async (req: Request, res: Response) => {
     
     res.cookie("github_token", accessToken, {
       httpOnly: true,
-      sameSite: isProduction ? "none" : "lax", // "none" required for cross-origin in production
-      secure: isProduction, // true in production (requires HTTPS)
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      path: "/",
-      ...(isProduction && process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
+      secure: true,
+      sameSite: "none",
+      domain: ".devdep.dpdns.org",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/"
     });
 
     // Redirect to dashboard route
