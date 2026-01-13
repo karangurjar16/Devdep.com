@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Github } from "lucide-react";
+import { Github, Plus, Trash2 } from "lucide-react";
 
 export default function NewProject() {
   const { owner, repo } = useParams();
@@ -20,6 +20,62 @@ export default function NewProject() {
   const [projectName, setProjectName] = useState(repo || "");
   const [framework, setFramework] = useState("Other");
   const [rootDir, setRootDir] = useState("./");
+  const idRef = useRef(1);
+
+  const [envVars, setEnvVars] = useState(
+    [{ id: idRef.current, key: "", value: "" }]
+  );
+
+  function nextId() {
+    idRef.current += 1;
+    return idRef.current;
+  }
+
+  function parseEnv(text: string) {
+    const lines = text.split(/\r?\n/);
+    const result: { id: number; key: string; value: string }[] = [];
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+      if (line.startsWith("#")) continue;
+      line = line.replace(/^export\s+/, "");
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      let key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      result.push({ id: nextId(), key, value });
+    }
+    return result;
+  }
+
+  function handleDeploy() {
+    const envObject: Record<string, string> = {};
+    for (const e of envVars) {
+      if (e.key.trim() === "") continue;
+      envObject[e.key] = e.value;
+    }
+
+    const payload = {
+      owner,
+      repo,
+      team,
+      projectName,
+      framework,
+      rootDir,
+      env: envObject,
+    };
+
+    // For now just log the payload. Replace with a POST to your API when ready.
+    // fetch('/api/projects', { method: 'POST', body: JSON.stringify(payload) })
+    console.log('Deploy payload:', payload);
+    alert('Deploy payload logged to console');
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -46,7 +102,7 @@ export default function NewProject() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="karangurjar16’s projects">
-                    karangurjar16’s projects (Hobby)
+                    karangurjar17’s projects (Hobby)
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -86,13 +142,91 @@ export default function NewProject() {
             />
           </div>
 
+          {/* Environment Variables */}
+          <div className="space-y-1">
+            <label className="text-sm">Environment Variables (.env)</label>
+            <textarea
+              onPaste={(e) => {
+                try {
+                  const pasted = e.clipboardData.getData("text");
+                  const parsed = parseEnv(pasted);
+                  if (parsed.length > 0) {
+                    setEnvVars(parsed.map((p) => ({ ...p })));
+                  }
+                } catch (err) {
+                  // ignore
+                }
+              }}
+              placeholder={"Paste .env content here to auto-populate"}
+              className="w-full rounded border p-2 text-sm min-h-[56px]"
+            />
+
+            <div className="space-y-2">
+              {envVars.map((env, idx) => (
+                <div key={env.id} className="flex gap-2">
+                  <Input
+                    placeholder="KEY"
+                    value={env.key}
+                    onChange={(e) =>
+                      setEnvVars((s) =>
+                        s.map((it) => (it.id === env.id ? { ...it, key: e.target.value } : it))
+                      )
+                    }
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={env.value}
+                    onChange={(e) =>
+                      setEnvVars((s) =>
+                        s.map((it) => (it.id === env.id ? { ...it, value: e.target.value } : it))
+                      )
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      setEnvVars((s) => s.filter((it) => it.id !== env.id))
+                    }
+                    aria-label="Remove variable"
+                    className="px-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setEnvVars((s) => [...s, { id: nextId(), key: "", value: "" }])
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add variable
+              </Button>
+            </div>
+          </div>
+
           {/* Deploy */}
-          <Button className="w-full mt-4">Deploy</Button>
+          <Button className="w-full mt-4" onClick={handleDeploy}>
+            Deploy
+          </Button>
 
           {/* Debug (optional, remove later) */}
           <pre className="text-xs text-muted-foreground">
             {JSON.stringify(
-              { owner, repo, team, projectName, framework, rootDir },
+              {
+                owner,
+                repo,
+                team,
+                projectName,
+                framework,
+                rootDir,
+                env: envVars.reduce((acc, e) => {
+                  if (!e.key) return acc;
+                  acc[e.key] = e.value;
+                  return acc;
+                }, {} as Record<string, string>),
+              },
               null,
               2
             )}

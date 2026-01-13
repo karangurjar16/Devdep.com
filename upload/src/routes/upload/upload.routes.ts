@@ -33,7 +33,7 @@ router.post("/deploy", async (req, res) => {
 
         await client.set(id, "Deploying");
 
-        await client.lPush("upload-queue", id);
+       
 
         await prisma.deploy.create({
             data: {
@@ -42,9 +42,12 @@ router.post("/deploy", async (req, res) => {
                 repoUrl,
                 projectName: repo.projectName,
                 framework: repo.framework,
-                rootDir: repo.rootDir
+                rootDir: repo.rootDir,
+                env: repo.env || {}
             }
         });
+        
+        await client.lPush("upload-queue", id);
 
         res.json({ id });
 
