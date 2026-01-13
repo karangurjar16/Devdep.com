@@ -1,1 +1,1 @@
-{"root":["./src/aws.ts","./src/index.ts","./src/redis.ts","./src/utils.ts"],"version":"5.8.3"}
+{"root":["./src/aws.ts","./src/db.ts","./src/deploynode.ts","./src/index.ts","./src/pm2runner.ts","./src/portmanager.ts","./src/redis.ts","./src/utils.ts"],"version":"5.8.3"}
