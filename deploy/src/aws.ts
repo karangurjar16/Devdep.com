@@ -94,7 +94,10 @@ export async function copyFinalDist(id: string): Promise<void> {
             throw new Error("Invalid deployment ID provided");
         }
 
-        const folderPath = path.join(__dirname, `output/${id}/dist`);
+        let folderPath = path.join(__dirname, `output/${id}/dist`);
+        if (!fs.existsSync(folderPath)) {
+            folderPath = path.join(__dirname, `output/${id}/build`);
+        }
 
         // Validation: Check if dist folder exists
         if (!fs.existsSync(folderPath)) {
@@ -113,7 +116,11 @@ export async function copyFinalDist(id: string): Promise<void> {
         console.log(`📦 Found ${allFiles.length} file(s) to upload`);
 
         const uploadPromises = allFiles.map(async (file) => {
-            const relativePath = file.slice(folderPath.length + 1);
+            const relativePath = path
+                .relative(folderPath, file)      // get relative path
+                .split(path.sep)                 // split by OS separator
+                .join("/");                      // force S3-style /
+        
             const s3Key = `dist/${id}/${relativePath}`;
             await uploadFile(s3Key, file);
         });
