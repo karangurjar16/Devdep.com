@@ -3,16 +3,19 @@ import { S3 } from "aws-sdk";
 import "dotenv/config";
 import mime from "mime-types";
 import { LRUCache } from "lru-cache";
-
-const s3 = new S3({
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    endpoint: process.env.R2_ENDPOINT,
-    region: "auto",
-    signatureVersion: "v4"
-});
+import { client } from './redis'
+import { createProxyServer } from "http-proxy";
 
 const app = express();
+const proxy = createProxyServer({});
+const s3 = new S3({
+  accessKeyId: process.env.R2_ACCESS_KEY_ID,
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  endpoint: process.env.R2_ENDPOINT,
+  region: "auto",
+  signatureVersion: "v4"
+});
+
 
 const fileCache = new LRUCache<string, Buffer>({
     max: 500,                 
@@ -23,6 +26,13 @@ app.use(async (req, res) => {
     try {
       const host = req.hostname;
       const id = host.split(".")[0];
+      const port = await client.get(`${id}:Port`);
+      if (port) {
+        // BACKEND → proxy to PM2 service
+        return proxy.web(req, res, {
+          target: `http://127.0.0.1:${port}`
+        });
+      }
   
       let filePath = decodeURIComponent(req.path);
   
