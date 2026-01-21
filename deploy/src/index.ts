@@ -91,7 +91,13 @@ async function main() {
                         const result = await deployNodeProject(id, project);
                         console.log("--------------------------------------------------");
                         console.log(`✅ Node.js deployment completed:`, result);
-                        await client.set(`${id}:Port`,result.port)
+                        console.log("+++++++++++++++++++++++")
+                        console.log(result.port);
+                        await client.set(`${id}:Port`,result.port);
+                        console.log("++++++++++++++++++++++++++++++++++")
+                        const res = await client.get(`${id}:Port`);
+                        console.log(res);
+
                     } catch (err: any) {
                         console.error(`❌ Error deploying Node.js project for id ${id}:`, err?.message || err);
                         await client.set(`${id}:status`, `Failed - Deployment error: ${err?.message || 'Unknown error'}`);
