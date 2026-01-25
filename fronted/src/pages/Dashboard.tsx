@@ -19,9 +19,12 @@ import {
   Github,
   Calendar,
   Folder,
-  MoreVertical,
   Activity,
+  Globe,
 } from "lucide-react";
+import DropdownMenu, { type MenuOption } from "@/components/DropdownMenu";
+import AddDomainDialog from "@/components/AddDomainDialog";
+import { reserveDomain } from "@/api/domain";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -29,6 +32,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
+  const [isAddDomainDialogOpen, setIsAddDomainDialogOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<DeployedProject | null>(null);
 
   useEffect(() => {
     getDeployedProjects()
@@ -122,6 +127,42 @@ export default function Dashboard() {
     return { owner: "", name: "" };
   };
 
+  // Define menu options - easily extensible
+  const getMenuOptions = (): MenuOption<DeployedProject>[] => [
+    {
+      label: "Add Domain",
+      icon: <Globe className="h-4 w-4" />,
+      onClick: (project) => {
+        setSelectedProject(project);
+        setIsAddDomainDialogOpen(true);
+      },
+    },
+    // Add more options here easily:
+    // {
+    //   label: "Settings",
+    //   icon: <Settings className="h-4 w-4" />,
+    //   onClick: (project) => {
+    //     console.log("Settings clicked for project:", project.id);
+    //   },
+    // },
+  ];
+
+  const handleAddDomain = async (domain: string, project: DeployedProject) => {
+    try {
+      const result = await reserveDomain(project.id, domain);
+      if (result.success) {
+        console.log("Domain added successfully:", domain);
+        // You can add a success toast notification here
+        // Optionally refresh the projects list or update UI
+      } else {
+        throw new Error(result.error || "Failed to reserve domain");
+      }
+    } catch (error) {
+      console.error("Error adding domain:", error);
+      throw error; // Re-throw to let the dialog handle the error
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -155,7 +196,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {projects.map((project) => {
             const { owner, name } = extractRepoOwnerAndName(project.repoUrl);
-            const deploymentUrl = `${project.id}.devdep.app`; // Construct deployment URL
+            const deploymentUrl = `${project.id}.devdep.dpdns.org`; // Construct deployment URL
 
             return (
               <Card key={project.id} className="flex flex-col hover:shadow-lg transition-shadow">
@@ -176,7 +217,11 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-2 ml-2">
                       <Activity className="h-4 w-4 text-muted-foreground" />
-                      <MoreVertical className="h-4 w-4 text-muted-foreground cursor-pointer" />
+                      <DropdownMenu
+                        id={project.id}
+                        options={getMenuOptions()}
+                        data={project}
+                      />
                     </div>
                   </div>
 
@@ -221,6 +266,13 @@ export default function Dashboard() {
           })}
         </div>
       )}
+
+      <AddDomainDialog
+        open={isAddDomainDialogOpen}
+        onOpenChange={setIsAddDomainDialogOpen}
+        project={selectedProject}
+        onAddDomain={handleAddDomain}
+      />
     </div>
   );
 }

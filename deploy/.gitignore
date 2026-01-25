@@ -31,3 +31,6 @@ Thumbs.db
 .cache/
 
 /src/generated/prisma
+
+ports.json
+
