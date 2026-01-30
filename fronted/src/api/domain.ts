@@ -39,3 +39,19 @@ export async function reserveDomain(
 
   return { success: true };
 }
+
+export async function getDomainsByProjectId(
+  id: string,
+): Promise<string[]> {
+  const res = await fetch(`${API_URL}/domain/${id}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch domains");
+  }
+
+  const data: { domains: string[] } = await res.json();
+  return data.domains;
+}

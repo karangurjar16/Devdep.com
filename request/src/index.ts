@@ -79,5 +79,5 @@ app.use(async (req, res) => {
 
 
 app.listen(9000, () => {
-  console.log("Frontend static router running on port 3001");
+  console.log("Frontend static router running on port 9000");
 });

@@ -42,10 +42,8 @@ router.get("/github/callback", async (req: Request, res: Response) => {
 
     // Cookie configuration for production
     const isProduction = process.env.NODE_ENV === "production";
-    
     // Determine frontend URL: try to get from referer, then env, then default
     let frontendUrl = process.env.FRONTEND_URL;
-    
     // Try to extract frontend URL from referer header if available
     const referer = req.headers.referer;
     if (referer && !frontendUrl) {
@@ -57,22 +55,24 @@ router.get("/github/callback", async (req: Request, res: Response) => {
         // If referer parsing fails, continue with default
       }
     }
-    
+
     // Fallback to default if still not set
     if (!frontendUrl) {
-      frontendUrl = isProduction 
+      frontendUrl = isProduction
         ? (process.env.FRONTEND_URL || "https://devdep.dpdns.org")
         : "http://localhost:5173";
     }
-    
+
     // Ensure frontendUrl doesn't have trailing slash
     frontendUrl = frontendUrl.replace(/\/$/, "");
-    
+
+    const isProd = process.env.NODE_ENV === "production";
+
     res.cookie("github_token", accessToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      domain: ".devdep.dpdns.org",
+      secure: isProd,                    // false on localhost
+      sameSite: isProd ? "none" : "lax", // lax works on http
+      domain: isProd ? ".devdep.dpdns.org" : "localhost",
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: "/"
     });

@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,14 +12,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Github, Plus, Trash2 } from "lucide-react";
+import { deployProject } from "@/api/deploy";
 
 export default function NewProject() {
   const { owner, repo } = useParams();
+  const navigate = useNavigate();
 
-  const [team, setTeam] = useState("karangurjar16’s projects");
+  const [team, setTeam] = useState("karangurjar16's projects");
   const [projectName, setProjectName] = useState(repo || "");
   const [framework, setFramework] = useState("Other");
   const [rootDir, setRootDir] = useState("./");
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const idRef = useRef(1);
 
   const [envVars, setEnvVars] = useState(
@@ -54,7 +58,12 @@ export default function NewProject() {
     return result;
   }
 
-  function handleDeploy() {
+  async function handleDeploy() {
+    if (!owner || !repo) {
+      setError("Owner and repository are required");
+      return;
+    }
+
     const envObject: Record<string, string> = {};
     for (const e of envVars) {
       if (e.key.trim() === "") continue;
@@ -71,10 +80,22 @@ export default function NewProject() {
       env: envObject,
     };
 
-    // For now just log the payload. Replace with a POST to your API when ready.
-    // fetch('/api/projects', { method: 'POST', body: JSON.stringify(payload) })
-    console.log('Deploy payload:', payload);
-    alert('Deploy payload logged to console');
+    setIsDeploying(true);
+    setError(null);
+
+    try {
+      await deployProject(payload);
+      
+      // Navigate to dashboard after successful deployment
+      navigate("/dashboard");
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to deploy project";
+      setError(errorMessage);
+      console.error("Deployment error:", err);
+    } finally {
+      setIsDeploying(false);
+    }
   }
 
   return (
@@ -162,7 +183,7 @@ export default function NewProject() {
             />
 
             <div className="space-y-2">
-              {envVars.map((env, idx) => (
+              {envVars.map((env) => (
                 <div key={env.id} className="flex gap-2">
                   <Input
                     placeholder="KEY"
@@ -206,9 +227,20 @@ export default function NewProject() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Deploy */}
-          <Button className="w-full mt-4" onClick={handleDeploy}>
-            Deploy
+          <Button
+            className="w-full mt-4"
+            onClick={handleDeploy}
+            disabled={isDeploying}
+          >
+            {isDeploying ? "Deploying..." : "Deploy"}
           </Button>
 
           {/* Debug (optional, remove later) */}

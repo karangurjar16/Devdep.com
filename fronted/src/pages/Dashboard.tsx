@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import DropdownMenu, { type MenuOption } from "@/components/DropdownMenu";
 import AddDomainDialog from "@/components/AddDomainDialog";
-import { reserveDomain } from "@/api/domain";
+import { reserveDomain, getDomainsByProjectId } from "@/api/domain";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
   const [isAddDomainDialogOpen, setIsAddDomainDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<DeployedProject | null>(null);
+  const [projectDomains, setProjectDomains] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     getDeployedProjects()
@@ -85,19 +86,68 @@ export default function Dashboard() {
     };
   }, [projects]);
 
+  // Fetch domains for all projects
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    const fetchDomains = async () => {
+      try {
+        const domainEntries = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const domains = await getDomainsByProjectId(project.id);
+              return [project.id, domains] as const;
+            } catch {
+              return [project.id, []] as const;
+            }
+          }),
+        );
+
+        setProjectDomains((prev) => ({
+          ...prev,
+          ...Object.fromEntries(domainEntries),
+        }));
+      } catch (error) {
+        console.error("Error fetching domains:", error);
+      }
+    };
+
+    fetchDomains();
+  }, [projects]);
+
   const getStatusVariant = (status?: DeployStatus | "Unknown") => {
-    const value = status?.toLowerCase();
+    if (!status) return "outline" as const;
+    
+    const value = status.toLowerCase();
+    
+    // Check if status starts with "Failed" (case-insensitive)
+    if (value.startsWith("failed")) {
+      return "destructive" as const;
+    }
+    
     switch (value) {
       case "uploading":
       case "deploying":
         return "secondary" as const;
+      case "deployed":
       case "running":
         return "default" as const;
-      case "failed":
-        return "destructive" as const;
       default:
         return "outline" as const;
     }
+  };
+
+  const getStatusClassName = (status?: DeployStatus | "Unknown") => {
+    if (!status) return "";
+    
+    const value = status.toLowerCase();
+    
+    // Green color for "Deployed" status
+    if (value === "deployed") {
+      return "bg-green-500 text-white border-transparent hover:bg-green-600";
+    }
+    
+    return "";
   };
 
   const formatDate = (dateString: string) => {
@@ -152,8 +202,16 @@ export default function Dashboard() {
       const result = await reserveDomain(project.id, domain);
       if (result.success) {
         console.log("Domain added successfully:", domain);
-        // You can add a success toast notification here
-        // Optionally refresh the projects list or update UI
+        // Refresh domains for this project
+        try {
+          const domains = await getDomainsByProjectId(project.id);
+          setProjectDomains((prev) => ({
+            ...prev,
+            [project.id]: domains,
+          }));
+        } catch (error) {
+          console.error("Error refreshing domains:", error);
+        }
       } else {
         throw new Error(result.error || "Failed to reserve domain");
       }
@@ -214,6 +272,27 @@ export default function Dashboard() {
                       >
                         {deploymentUrl}
                       </a>
+                      {/* Custom Domains */}
+                      {projectDomains[project.id] && projectDomains[project.id].length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {projectDomains[project.id].map((domain) => {
+                            const fullDomain = `${domain}.devdep.dpdns.org`;
+                            return (
+                              <a
+                                key={domain}
+                                href={`https://${fullDomain}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 group"
+                              >
+                                <Globe className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                <span>{fullDomain}</span>
+                                <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 ml-2">
                       <Activity className="h-4 w-4 text-muted-foreground" />
@@ -256,7 +335,10 @@ export default function Dashboard() {
                   {project.rootDir !== "./" && (
                     <Badge variant="outline">Root: {project.rootDir}</Badge>
                   )}
-                  <Badge variant={getStatusVariant(statuses[project.id])}>
+                  <Badge 
+                    variant={getStatusVariant(statuses[project.id])}
+                    className={getStatusClassName(statuses[project.id])}
+                  >
                     {statuses[project.id] ?? "Loading status..."}
                   </Badge>
                 </div>
