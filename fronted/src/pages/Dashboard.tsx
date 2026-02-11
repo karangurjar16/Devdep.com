@@ -21,10 +21,13 @@ import {
   Folder,
   Activity,
   Globe,
+  Trash2,
 } from "lucide-react";
 import DropdownMenu, { type MenuOption } from "@/components/DropdownMenu";
 import AddDomainDialog from "@/components/AddDomainDialog";
+import DeleteProjectDialog from "@/components/DeleteProjectDialog";
 import { reserveDomain, getDomainsByProjectId } from "@/api/domain";
+import { deleteProject } from "@/api/deploy";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -33,6 +36,7 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
   const [isAddDomainDialogOpen, setIsAddDomainDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<DeployedProject | null>(null);
   const [projectDomains, setProjectDomains] = useState<Record<string, string[]>>({});
 
@@ -117,14 +121,14 @@ export default function Dashboard() {
 
   const getStatusVariant = (status?: DeployStatus | "Unknown") => {
     if (!status) return "outline" as const;
-    
+
     const value = status.toLowerCase();
-    
+
     // Check if status starts with "Failed" (case-insensitive)
     if (value.startsWith("failed")) {
       return "destructive" as const;
     }
-    
+
     switch (value) {
       case "uploading":
       case "deploying":
@@ -139,14 +143,14 @@ export default function Dashboard() {
 
   const getStatusClassName = (status?: DeployStatus | "Unknown") => {
     if (!status) return "";
-    
+
     const value = status.toLowerCase();
-    
+
     // Green color for "Deployed" status
     if (value === "deployed") {
       return "bg-green-500 text-white border-transparent hover:bg-green-600";
     }
-    
+
     return "";
   };
 
@@ -187,14 +191,14 @@ export default function Dashboard() {
         setIsAddDomainDialogOpen(true);
       },
     },
-    // Add more options here easily:
-    // {
-    //   label: "Settings",
-    //   icon: <Settings className="h-4 w-4" />,
-    //   onClick: (project) => {
-    //     console.log("Settings clicked for project:", project.id);
-    //   },
-    // },
+    {
+      label: "Delete Project",
+      icon: <Trash2 className="h-4 w-4" />,
+      onClick: (project) => {
+        setSelectedProject(project);
+        setIsDeleteDialogOpen(true);
+      },
+    },
   ];
 
   const handleAddDomain = async (domain: string, project: DeployedProject) => {
@@ -217,6 +221,18 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error adding domain:", error);
+      throw error; // Re-throw to let the dialog handle the error
+    }
+  };
+
+  const handleDeleteProject = async (project: DeployedProject) => {
+    try {
+      await deleteProject(project.id);
+      // Remove project from local state
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      console.log("Project deleted successfully:", project.id);
+    } catch (error) {
+      console.error("Error deleting project:", error);
       throw error; // Re-throw to let the dialog handle the error
     }
   };
@@ -330,18 +346,18 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                <div className="flex gap-2 flex-wrap items-center">
-                  <Badge variant="secondary">{project.framework}</Badge>
-                  {project.rootDir !== "./" && (
-                    <Badge variant="outline">Root: {project.rootDir}</Badge>
-                  )}
-                  <Badge 
-                    variant={getStatusVariant(statuses[project.id])}
-                    className={getStatusClassName(statuses[project.id])}
-                  >
-                    {statuses[project.id] ?? "Loading status..."}
-                  </Badge>
-                </div>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Badge variant="secondary">{project.framework}</Badge>
+                    {project.rootDir !== "./" && (
+                      <Badge variant="outline">Root: {project.rootDir}</Badge>
+                    )}
+                    <Badge
+                      variant={getStatusVariant(statuses[project.id])}
+                      className={getStatusClassName(statuses[project.id])}
+                    >
+                      {statuses[project.id] ?? "Loading status..."}
+                    </Badge>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -354,6 +370,12 @@ export default function Dashboard() {
         onOpenChange={setIsAddDomainDialogOpen}
         project={selectedProject}
         onAddDomain={handleAddDomain}
+      />
+      <DeleteProjectDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        project={selectedProject}
+        onDelete={handleDeleteProject}
       />
     </div>
   );

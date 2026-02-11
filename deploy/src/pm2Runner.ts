@@ -121,3 +121,48 @@ export async function startWithPM2(id: string, projectPath: string, port: number
     };
   }
 }
+
+export async function stopPM2Process(id: string): Promise<{ status: string; process: string; error?: string }> {
+  try {
+    // Validation: Check if id is valid
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error("Invalid deployment ID provided");
+    }
+
+    console.log(`🗑️ Stopping PM2 process: ${id}...`);
+
+    // Delete the PM2 process
+    try {
+      const result = await run(`cmd /c "pm2 delete ${id}"`);
+      console.log(`✅ PM2 process ${id} stopped and removed successfully`);
+      console.log(`📊 PM2 Output: ${result.stdout}`);
+
+      if (result.stderr) {
+        console.warn(`⚠️ PM2 Warnings: ${result.stderr}`);
+      }
+
+      return {
+        status: "stopped",
+        process: id
+      };
+    } catch (deleteError: any) {
+      // If process doesn't exist, that's fine - it's already gone
+      if (deleteError?.error?.includes("doesn't exist") || deleteError?.stderr?.includes("doesn't exist")) {
+        console.log(`ℹ️ PM2 process ${id} not found (already deleted)`);
+        return {
+          status: "not_found",
+          process: id
+        };
+      }
+      throw deleteError;
+    }
+  } catch (err: any) {
+    console.error(`❌ Failed to stop PM2 process ${id}:`, err?.error || err?.message || 'Unknown error');
+    return {
+      status: "failed",
+      process: id,
+      error: err?.error || err?.message || "Unknown PM2 failure"
+    };
+  }
+}
+

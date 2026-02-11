@@ -1,8 +1,11 @@
+import 'dotenv/config';
 import { copyFinalDist, downloadS3Folder } from './aws';
 import { client } from './redis'
 import { buildProject } from './utils';
 import { pool } from './db';
 import { deployNodeProject } from './deployNode';
+import path from 'path';
+import simpleGit from 'simple-git';
 
 async function main() {
     try {
@@ -13,10 +16,10 @@ async function main() {
             try {
                 console.log("⏳ Waiting for deployment job in queue...");
                 const res = await client.brPop("upload-queue", 0);
-                
+
                 // @ts-ignore
                 const id = res?.element;
-                
+
                 // Validation: Check if id exists and is valid
                 if (!id || typeof id !== 'string' || id.trim().length === 0) {
                     console.warn("⚠️ Invalid or empty deployment ID received, skipping...");
@@ -31,13 +34,13 @@ async function main() {
                 try {
                     console.log(`🔍 Fetching project details for ID: ${id}...`);
                     const result = await pool.query('SELECT * FROM "Deploy" WHERE id = $1', [id]);
-                    
+
                     if (result.rows.length === 0) {
                         console.error(`❌ Deploy not found for id: ${id}`);
                         await client.set(`${id}:status`, "Failed - Project not found");
                         continue;
                     }
-                    
+
                     project = result.rows[0];
                     console.log(`✅ Project found: ${project.framework || 'Unknown'} framework`);
                 } catch (err: any) {
@@ -55,14 +58,18 @@ async function main() {
 
                 console.log("--------------------------------------------------");
 
-                // Download files from S3
+                // Clone repository from Git
                 try {
-                    console.log(`📥 Downloading files from S3 for ID: ${id}...`);
-                    await downloadS3Folder(`output/${id}`);
-                    console.log(`✅ Files downloaded successfully for ID: ${id}`);
+
+                    console.log(`📥 Cloning repository for ID: ${id}...`);
+                    console.log(`🔗 Repository URL: ${project.repoUrl}`);
+                    const baseDir = path.join(__dirname, "output", id);
+                    await simpleGit().clone(project.repoUrl, baseDir);
+                    console.log(`✅ Repository cloned successfully to: ${baseDir}`);
+                    await client.set(`${id}:status`, "Deploying");
                 } catch (err: any) {
-                    console.error(`❌ Error downloading files from S3 for id ${id}:`, err?.message || err);
-                    await client.set(`${id}:status`, `Failed - S3 download error: ${err?.message || 'Unknown error'}`);
+                    console.error(`❌ Error cloning repository for id ${id}:`, err?.message || err);
+                    await client.set(`${id}:status`, `Failed - Git clone error: ${err?.message || 'Unknown error'}`);
                     continue;
                 }
 
@@ -75,7 +82,7 @@ async function main() {
                         console.log("📦 Dependencies downloading...");
                         await buildProject(id);
                         console.log("✅ Build completed successfully");
-                        
+
                         console.log("--------------------------------------------------");
                         console.log(`📤 Uploading final distribution for ID: ${id}...`);
                         await copyFinalDist(id);
@@ -90,13 +97,12 @@ async function main() {
                         console.log(`🟢 Node.js project detected, starting deployment...`);
                         const result = await deployNodeProject(id, project);
                         console.log("--------------------------------------------------");
-                        console.log(`✅ Node.js deployment completed:`, result);
-                        console.log("+++++++++++++++++++++++")
-                        console.log(result.port);
-                        await client.set(`${id}:Port`,result.port);
-                        console.log("++++++++++++++++++++++++++++++++++")
-                        const res = await client.get(`${id}:Port`);
-                        console.log(res);
+                        console.log(`✅ Node.js deployment completed successfully`);
+                        console.log(`🔌 Assigned Port: ${result.port}`);
+                        console.log(`💾 Storing port in Redis cache...`);
+                        await client.set(`${id}:Port`, result.port);
+                        console.log(`✅ Port ${result.port} cached in Redis for deployment ID: ${id}`);
+                        console.log(`📍 Deployment accessible on port: ${result.port}`);
 
                     } catch (err: any) {
                         console.error(`❌ Error deploying Node.js project for id ${id}:`, err?.message || err);

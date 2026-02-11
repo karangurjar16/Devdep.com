@@ -1,6 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 
 import githubAuthRouter from "./auth/github.auth";
@@ -8,9 +10,6 @@ import githubRoutes from "./routes/github/github.routes";
 // import deployRoutes from "./routes/deploy/deploy.routes";
 import uploadRoutes from "./routes/upload/upload.routes";
 import doaminRoutes from "./routes/domain/domain.routes"
-
-
-dotenv.config();
 
 const app = express();
 
@@ -30,7 +29,7 @@ app.use("/auth", githubAuthRouter);
 app.use("/github", githubRoutes);
 // app.use("/deploy", deployRoutes);
 app.use("/upload", uploadRoutes);
-app.use("/domain",doaminRoutes)
+app.use("/domain", doaminRoutes)
 
 app.get("/", (req, res) => {
   res.send("Hello World");

@@ -16,8 +16,8 @@ export interface DeployResponse {
 
 export async function deployProject(
   payload: DeployRequest,
-){
-  const res = await fetch(`${API_URL}/upload/deploy`, {
+) {
+  await fetch(`${API_URL}/upload/deploy`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -28,4 +28,17 @@ export async function deployProject(
 
 
   return;
+}
+
+
+export async function deleteProject(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/upload/deploy/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to delete project");
+  }
 }

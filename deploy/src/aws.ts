@@ -120,7 +120,7 @@ export async function copyFinalDist(id: string): Promise<void> {
                 .relative(folderPath, file)      // get relative path
                 .split(path.sep)                 // split by OS separator
                 .join("/");                      // force S3-style /
-        
+
             const s3Key = `dist/${id}/${relativePath}`;
             await uploadFile(s3Key, file);
         });
@@ -183,5 +183,51 @@ const uploadFile = async (fileName: string, localFilePath: string): Promise<void
     } catch (error: any) {
         console.error(`❌ Error uploading file ${fileName}:`, error?.message || error);
         throw new Error(`Failed to upload file ${fileName}: ${error?.message || 'Unknown error'}`);
+    }
+}
+
+export async function deleteS3Folder(id: string): Promise<void> {
+    try {
+        // Validation: Check if id is valid
+        if (!id || typeof id !== 'string' || id.trim().length === 0) {
+            throw new Error("Invalid deployment ID provided");
+        }
+
+        const prefix = `dist/${id}/`;
+        console.log(`🗑️ Deleting S3 objects with prefix: ${prefix}...`);
+
+        // List all objects with the prefix
+        const listResponse = await s3.listObjectsV2({
+            Bucket: "devdep",
+            Prefix: prefix
+        }).promise();
+
+        if (!listResponse.Contents || listResponse.Contents.length === 0) {
+            console.log(`ℹ️ No files found in S3 with prefix: ${prefix}`);
+            return;
+        }
+
+        console.log(`📦 Found ${listResponse.Contents.length} file(s) to delete`);
+
+        // Prepare objects for deletion
+        const objectsToDelete = listResponse.Contents.map(({ Key }) => ({ Key: Key! }));
+
+        // Delete objects in batch (S3 supports up to 1000 objects per request)
+        const deleteResponse = await s3.deleteObjects({
+            Bucket: "devdep",
+            Delete: {
+                Objects: objectsToDelete,
+                Quiet: false
+            }
+        }).promise();
+
+        console.log(`✅ Successfully deleted ${deleteResponse.Deleted?.length || 0} file(s) from S3`);
+
+        if (deleteResponse.Errors && deleteResponse.Errors.length > 0) {
+            console.warn(`⚠️ Failed to delete ${deleteResponse.Errors.length} file(s):`, deleteResponse.Errors);
+        }
+    } catch (error: any) {
+        console.error(`❌ Error deleting S3 folder: ${error?.message || error}`);
+        throw new Error(`Failed to delete S3 folder: ${error?.message || 'Unknown error'}`);
     }
 }
