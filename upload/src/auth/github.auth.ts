@@ -40,16 +40,28 @@ router.get("/github/callback", async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Token not received" });
     }
 
-    // Simple cookie - works everywhere
+    // Determine environment
+    const isProduction = process.env.NODE_ENV === "production";
+
+    // Determine frontend URL from env or use defaults
+    const frontendUrl = (process.env.FRONTEND_URL ||
+      (isProduction ? "https://devdep.dpdns.org" : "http://localhost:5173")
+    ).replace(/\/$/, ""); // Remove trailing slash
+
+    // Set cookie with appropriate domain for cross-subdomain access
     res.cookie("github_token", accessToken, {
       httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      secure: isProduction,                      // HTTPS only in production
+      sameSite: isProduction ? "none" : "lax",   // "none" for cross-site in production
+      domain: isProduction ? ".dpdns.org" : undefined, // Wildcard domain for production
+      maxAge: 30 * 24 * 60 * 60 * 1000,          // 30 days
       path: "/"
     });
 
-    // Simple redirect - use env variable or default
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-    res.redirect(`${frontendUrl}/dashboard`);
+    // Redirect to dashboard route
+    const redirectUrl = `${frontendUrl}/dashboard`;
+    console.log(`Redirecting to: ${redirectUrl}`);
+    res.redirect(redirectUrl);
   } catch (error: any) {
     console.error("OAuth callback error:", error?.message || error);
     res.status(500).json({ message: "OAuth failed" });
