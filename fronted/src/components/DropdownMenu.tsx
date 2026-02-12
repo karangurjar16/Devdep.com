@@ -15,7 +15,6 @@ type DropdownMenuProps<T = any> = {
 };
 
 export default function DropdownMenu<T = any>({
-  id,
   options,
   data,
   className = "",

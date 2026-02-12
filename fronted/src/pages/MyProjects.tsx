@@ -18,6 +18,9 @@ import {
     Code2,
     ExternalLink,
     Import,
+    Star,
+    GitFork,
+    ArrowLeft,
 } from "lucide-react";
 
 type Repo = {
@@ -49,72 +52,100 @@ export default function MyProjects() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <p className="p-6">Loading projects...</p>;
-    if (error) return <p className="p-6 text-red-500">{error}</p>;
+    if (loading) return <div className="min-h-screen bg-gradient-subtle flex items-center justify-center"><p className="text-muted-foreground">Loading repositories...</p></div>;
+    if (error) return <div className="min-h-screen bg-gradient-subtle flex items-center justify-center"><p className="text-destructive">{error}</p></div>;
 
     return (
-        <div className="p-6 space-y-6">
-            <h1 className="text-2xl font-semibold">My Projects</h1>
+        <div className="min-h-screen bg-gradient-subtle">
+            {/* Header */}
+            <div className="glass-strong border-b border-white/10 sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-6 py-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">Import Project</h1>
+                            <p className="text-sm text-muted-foreground mt-1">Select a repository from your GitHub account</p>
+                        </div>
+                        <Button
+                            onClick={() => navigate("/dashboard")}
+                            variant="outline"
+                            className="glass border-white/20 hover:bg-white/10"
+                        >
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back to Dashboard
+                        </Button>
+                    </div>
+                </div>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {repos.map((repo) => (
-                    <Card key={repo.id} className="flex flex-col">
-                        <CardHeader className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base truncate">
-                                    {repo.name}
-                                </CardTitle>
-                                {repo.private ? (
-                                    <Lock className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                    <Unlock className="h-4 w-4 text-muted-foreground" />
-                                )}
-                            </div>
+            {/* Content */}
+            <div className="max-w-7xl mx-auto px-6 py-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {repos.map((repo) => (
+                        <Card key={repo.id} className="glass hover-lift border-white/10 flex flex-col">
+                            <CardHeader className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base truncate flex items-center gap-2">
+                                        {repo.name}
+                                    </CardTitle>
+                                    {repo.private ? (
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                        <Unlock className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                </div>
 
-                            <div className="flex gap-2 flex-wrap">
-                                <Badge variant="secondary">
-                                    {repo.language || "Unknown"}
-                                </Badge>
-                                <Badge variant="outline">
-                                    {repo.private ? "Private" : "Public"}
-                                </Badge>
-                            </div>
-                        </CardHeader>
+                                <div className="flex gap-2 flex-wrap">
+                                    {repo.language && (
+                                        <Badge variant="secondary" className="font-medium">
+                                            <Code2 className="h-3 w-3 mr-1" />
+                                            {repo.language}
+                                        </Badge>
+                                    )}
+                                    <Badge variant="outline" className="border-white/20">
+                                        {repo.private ? "Private" : "Public"}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
 
-                        <CardContent className="space-y-3 flex-1">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Code2 className="h-4 w-4" />
-                                <span>{repo.stargazers_count} stars</span>
-                                <span>•</span>
-                                <span>{repo.forks_count} forks</span>
-                            </div>
+                            <CardContent className="space-y-3 flex-1">
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                        <Star className="h-4 w-4" />
+                                        <span>{repo.stargazers_count}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <GitFork className="h-4 w-4" />
+                                        <span>{repo.forks_count}</span>
+                                    </div>
+                                </div>
 
-                            <a
-                                href={repo.html_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
-                            >
-                                View on GitHub
-                                <ExternalLink className="h-4 w-4" />
-                            </a>
-                        </CardContent>
+                                <a
+                                    href={repo.html_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline transition-colors"
+                                >
+                                    View on GitHub
+                                    <ExternalLink className="h-3 w-3" />
+                                </a>
+                            </CardContent>
 
-                        {/* Import Button */}
-                        <CardFooter>
-                            <Button
-                                className="w-full flex items-center gap-2"
-                                onClick={() =>
-                                    navigate(`/new-project/import/${repo.owner.login}/${repo.name}`)
-                                }
-                            >
-                                <Import className="h-4 w-4" />
-                                Import
-                            </Button>
+                            {/* Import Button */}
+                            <CardFooter>
+                                <Button
+                                    className="w-full btn-glossy"
+                                    onClick={() =>
+                                        navigate(`/new-project/import/${repo.owner.login}/${repo.name}`)
+                                    }
+                                >
+                                    <Import className="h-4 w-4 mr-2" />
+                                    Import Project
+                                </Button>
 
-                        </CardFooter>
-                    </Card>
-                ))}
+                            </CardFooter>
+                        </Card>
+                    ))}
+                </div>
             </div>
         </div>
     );

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Github, Plus, Trash2 } from "lucide-react";
+import { Github, Plus, Trash2, ArrowLeft, Rocket } from "lucide-react";
 import { deployProject } from "@/api/deploy";
 
 export default function NewProject() {
@@ -85,7 +85,7 @@ export default function NewProject() {
 
     try {
       await deployProject(payload);
-      
+
       // Navigate to dashboard after successful deployment
       navigate("/dashboard");
     } catch (err) {
@@ -99,172 +99,173 @@ export default function NewProject() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Card className="w-full max-w-2xl">
-        <CardContent className="p-6 space-y-6">
-          {/* Header */}
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold">New Project</h1>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Github className="h-4 w-4" />
-              <span>
-                Importing from GitHub · {owner}/{repo}
-              </span>
+    <div className="min-h-screen bg-gradient-subtle">
+      {/* Header */}
+      <div className="glass-strong border-b border-white/10 sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Configure & Deploy</h1>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                <Github className="h-4 w-4" />
+                <span>{owner}/{repo}</span>
+              </div>
             </div>
+            <Button
+              onClick={() => navigate("/my-projects")}
+              variant="outline"
+              className="glass border-white/20 hover:bg-white/10"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
           </div>
+        </div>
+      </div>
 
-          {/* Team + Name */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm">Vercel Team</label>
-              <Select value={team} onValueChange={setTeam}>
-                <SelectTrigger>
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <Card className="glass-strong border-white/10">
+          <CardContent className="p-8 space-y-6">
+            {/* Team + Name */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Team</label>
+                <Select value={team} onValueChange={setTeam}>
+                  <SelectTrigger className="glass border-white/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="karangurjar16's projects">
+                      karangurjar16's projects (Hobby)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Project Name</label>
+                <Input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="glass border-white/20"
+                />
+              </div>
+            </div>
+
+            {/* Framework */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Framework Preset</label>
+              <Select value={framework} onValueChange={setFramework}>
+                <SelectTrigger className="glass border-white/20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="karangurjar16’s projects">
-                    karangurjar17’s projects (Hobby)
-                  </SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                  <SelectItem value="Next.js">Next.js</SelectItem>
+                  <SelectItem value="React">React</SelectItem>
+                  <SelectItem value="Node">Node</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm">Project Name</label>
+            {/* Root Directory */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Root Directory</label>
               <Input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
+                value={rootDir}
+                onChange={(e) => setRootDir(e.target.value)}
+                className="glass border-white/20"
+                placeholder="./"
               />
             </div>
-          </div>
 
-          {/* Framework */}
-          <div className="space-y-1">
-            <label className="text-sm">Framework Preset</label>
-            <Select value={framework} onValueChange={setFramework}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Other">Other</SelectItem>
-                <SelectItem value="Next.js">Next.js</SelectItem>
-                <SelectItem value="React">React</SelectItem>
-                <SelectItem value="Node">Node</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Root Directory */}
-          <div className="space-y-1">
-            <label className="text-sm">Root Directory</label>
-            <Input
-              value={rootDir}
-              onChange={(e) => setRootDir(e.target.value)}
-            />
-          </div>
-
-          {/* Environment Variables */}
-          <div className="space-y-1">
-            <label className="text-sm">Environment Variables (.env)</label>
-            <textarea
-              onPaste={(e) => {
-                try {
-                  const pasted = e.clipboardData.getData("text");
-                  const parsed = parseEnv(pasted);
-                  if (parsed.length > 0) {
-                    setEnvVars(parsed.map((p) => ({ ...p })));
+            {/* Environment Variables */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Environment Variables</label>
+              <textarea
+                onPaste={(e) => {
+                  try {
+                    const pasted = e.clipboardData.getData("text");
+                    const parsed = parseEnv(pasted);
+                    if (parsed.length > 0) {
+                      setEnvVars(parsed.map((p) => ({ ...p })));
+                    }
+                  } catch (err) {
+                    // ignore
                   }
-                } catch (err) {
-                  // ignore
-                }
-              }}
-              placeholder={"Paste .env content here to auto-populate"}
-              className="w-full rounded border p-2 text-sm min-h-[56px]"
-            />
+                }}
+                placeholder="Paste .env content here to auto-populate"
+                className="w-full rounded-lg glass border-white/20 p-3 text-sm min-h-[80px] focus:ring-2 focus:ring-primary/50 transition-all"
+              />
 
-            <div className="space-y-2">
-              {envVars.map((env) => (
-                <div key={env.id} className="flex gap-2">
-                  <Input
-                    placeholder="KEY"
-                    value={env.key}
-                    onChange={(e) =>
-                      setEnvVars((s) =>
-                        s.map((it) => (it.id === env.id ? { ...it, key: e.target.value } : it))
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Value"
-                    value={env.value}
-                    onChange={(e) =>
-                      setEnvVars((s) =>
-                        s.map((it) => (it.id === env.id ? { ...it, value: e.target.value } : it))
-                      )
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      setEnvVars((s) => s.filter((it) => it.id !== env.id))
-                    }
-                    aria-label="Remove variable"
-                    className="px-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              <div className="space-y-2">
+                {envVars.map((env) => (
+                  <div key={env.id} className="flex gap-2">
+                    <Input
+                      placeholder="KEY"
+                      value={env.key}
+                      onChange={(e) =>
+                        setEnvVars((s) =>
+                          s.map((it) => (it.id === env.id ? { ...it, key: e.target.value } : it))
+                        )
+                      }
+                      className="glass border-white/20"
+                    />
+                    <Input
+                      placeholder="Value"
+                      value={env.value}
+                      onChange={(e) =>
+                        setEnvVars((s) =>
+                          s.map((it) => (it.id === env.id ? { ...it, value: e.target.value } : it))
+                        )
+                      }
+                      className="glass border-white/20"
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        setEnvVars((s) => s.filter((it) => it.id !== env.id))
+                      }
+                      aria-label="Remove variable"
+                      className="px-3 hover:bg-destructive/20 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
 
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setEnvVars((s) => [...s, { id: nextId(), key: "", value: "" }])
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" /> Add variable
-              </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setEnvVars((s) => [...s, { id: nextId(), key: "", value: "" }])
+                  }
+                  className="glass border-white/20 hover:bg-white/10"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add variable
+                </Button>
+              </div>
             </div>
-          </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Deploy */}
-          <Button
-            className="w-full mt-4"
-            onClick={handleDeploy}
-            disabled={isDeploying}
-          >
-            {isDeploying ? "Deploying..." : "Deploy"}
-          </Button>
-
-          {/* Debug (optional, remove later) */}
-          <pre className="text-xs text-muted-foreground">
-            {JSON.stringify(
-              {
-                owner,
-                repo,
-                team,
-                projectName,
-                framework,
-                rootDir,
-                env: envVars.reduce((acc, e) => {
-                  if (!e.key) return acc;
-                  acc[e.key] = e.value;
-                  return acc;
-                }, {} as Record<string, string>),
-              },
-              null,
-              2
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20">
+                {error}
+              </div>
             )}
-          </pre>
-        </CardContent>
-      </Card>
+
+            {/* Deploy Button */}
+            <Button
+              className="w-full btn-glossy py-6 text-base font-semibold"
+              onClick={handleDeploy}
+              disabled={isDeploying}
+            >
+              <Rocket className="mr-2 h-5 w-5" />
+              {isDeploying ? "Deploying..." : "Deploy Project"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ export interface DeployedProject {
   framework: string;
   rootDir: string;
   createdAt: string;
+  env?: Record<string, string>;
 }
 
 export type DeployStatus = "Uploading" | "Deploying" | "Running" | "Failed";

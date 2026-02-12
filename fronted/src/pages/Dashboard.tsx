@@ -19,7 +19,6 @@ import {
   Github,
   Calendar,
   Folder,
-  Activity,
   Globe,
   Trash2,
 } from "lucide-react";
@@ -254,129 +253,164 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Projects</h1>
-        <Button onClick={() => navigate("/my-projects")}>
-          My Projects
-        </Button>
+    <div className="min-h-screen bg-gradient-subtle">
+      {/* Header */}
+      <div className="glass-strong border-b border-white/10 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Projects</h1>
+              <p className="text-sm text-muted-foreground mt-1">Manage your deployed applications</p>
+            </div>
+            <Button
+              onClick={() => navigate("/my-projects")}
+              className="btn-glossy"
+            >
+              Import New Project
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {projects.length === 0 ? (
-        <div className="mt-10 text-muted-foreground">
-          No deployed projects found. Start by importing a project.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {projects.map((project) => {
-            const { owner, name } = extractRepoOwnerAndName(project.repoUrl);
-            const deploymentUrl = `${project.id}.devdep.dpdns.org`; // Construct deployment URL
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {projects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="glass-strong rounded-2xl p-12 text-center max-w-md">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-primary/20 flex items-center justify-center">
+                <Folder className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
+              <p className="text-muted-foreground mb-6">
+                Start by importing a project from GitHub
+              </p>
+              <Button
+                onClick={() => navigate("/my-projects")}
+                className="btn-glossy"
+              >
+                Import Your First Project
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map((project) => {
+              const { owner, name } = extractRepoOwnerAndName(project.repoUrl);
+              const deploymentUrl = `${project.id}.devdep.dpdns.org`;
 
-            return (
-              <Card key={project.id} className="flex flex-col hover:shadow-lg transition-shadow">
-                <CardHeader className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg font-semibold truncate">
-                        {project.projectName}
-                      </CardTitle>
+              return (
+                <Card
+                  key={project.id}
+                  className="glass hover-lift border-white/10 flex flex-col cursor-pointer transition-all hover:border-primary/30"
+                  onClick={() => navigate(`/project/${project.id}`)}
+                >
+                  <CardHeader className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg font-semibold truncate">
+                          {project.projectName}
+                        </CardTitle>
+                        <a
+                          href={`https://${deploymentUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-primary transition-colors block mt-1 flex items-center gap-1"
+                        >
+                          <Globe className="h-3 w-3" />
+                          {deploymentUrl}
+                        </a>
+                        {/* Custom Domains */}
+                        {projectDomains[project.id] && projectDomains[project.id].length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {projectDomains[project.id].map((domain) => {
+                              const fullDomain = `${domain}.devdep.dpdns.org`;
+                              return (
+                                <a
+                                  key={domain}
+                                  href={`https://${fullDomain}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 group"
+                                >
+                                  <Globe className="h-3.5 w-3.5 text-primary/70" />
+                                  <span>{fullDomain}</span>
+                                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className="flex items-center gap-2 ml-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenu
+                          id={project.id}
+                          options={getMenuOptions()}
+                          data={project}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <Github className="h-4 w-4 text-muted-foreground" />
                       <a
-                        href={`https://${deploymentUrl}`}
+                        href={project.repoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-muted-foreground hover:text-foreground transition-colors block mt-1"
+                        className="text-sm text-primary hover:underline flex items-center gap-1"
                       >
-                        {deploymentUrl}
+                        {owner}/{name}
+                        <ExternalLink className="h-3 w-3" />
                       </a>
-                      {/* Custom Domains */}
-                      {projectDomains[project.id] && projectDomains[project.id].length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {projectDomains[project.id].map((domain) => {
-                            const fullDomain = `${domain}.devdep.dpdns.org`;
-                            return (
-                              <a
-                                key={domain}
-                                href={`https://${fullDomain}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 group"
-                              >
-                                <Globe className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                                <span>{fullDomain}</span>
-                                <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </a>
-                            );
-                          })}
-                        </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-3 flex-1">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formatDate(project.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Folder className="h-4 w-4" />
+                        <span>main</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <Badge variant="secondary">{project.framework}</Badge>
+                      {project.rootDir !== "./" && (
+                        <Badge variant="outline">Root: {project.rootDir}</Badge>
                       )}
+                      <Badge
+                        variant={getStatusVariant(statuses[project.id])}
+                        className={getStatusClassName(statuses[project.id])}
+                      >
+                        {statuses[project.id] ?? "Loading status..."}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-2 ml-2">
-                      <Activity className="h-4 w-4 text-muted-foreground" />
-                      <DropdownMenu
-                        id={project.id}
-                        options={getMenuOptions()}
-                        data={project}
-                      />
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
-                  <div className="flex items-center gap-2">
-                    <Github className="h-4 w-4 text-muted-foreground" />
-                    <a
-                      href={project.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      {owner}/{name}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-3 flex-1">
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{formatDate(project.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Folder className="h-4 w-4" />
-                      <span>main</span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 flex-wrap items-center">
-                    <Badge variant="secondary">{project.framework}</Badge>
-                    {project.rootDir !== "./" && (
-                      <Badge variant="outline">Root: {project.rootDir}</Badge>
-                    )}
-                    <Badge
-                      variant={getStatusVariant(statuses[project.id])}
-                      className={getStatusClassName(statuses[project.id])}
-                    >
-                      {statuses[project.id] ?? "Loading status..."}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      <AddDomainDialog
-        open={isAddDomainDialogOpen}
-        onOpenChange={setIsAddDomainDialogOpen}
-        project={selectedProject}
-        onAddDomain={handleAddDomain}
-      />
-      <DeleteProjectDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        project={selectedProject}
-        onDelete={handleDeleteProject}
-      />
+        <AddDomainDialog
+          open={isAddDomainDialogOpen}
+          onOpenChange={setIsAddDomainDialogOpen}
+          project={selectedProject}
+          onAddDomain={handleAddDomain}
+        />
+        <DeleteProjectDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          project={selectedProject}
+          onDelete={handleDeleteProject}
+        />
+      </div>
     </div>
   );
 }
