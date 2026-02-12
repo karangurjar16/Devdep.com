@@ -1,6 +1,19 @@
 import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
+import os from "os";
+
+// Detect platform
+const isWindows = os.platform() === "win32";
+
+// Helper function to wrap commands for cross-platform compatibility
+function wrapCommand(cmd: string): string {
+  if (isWindows) {
+    return `cmd /c "${cmd}"`;
+  }
+  // For Unix/Linux (Ubuntu)
+  return cmd;
+}
 
 function run(cmd: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -68,12 +81,12 @@ export async function startWithPM2(id: string, projectPath: string, port: number
 
     // 1. Ensure PM2 daemon is running
     try {
-      await run(`cmd /c "pm2 ping"`);
+      await run(wrapCommand("pm2 ping"));
       console.log(`✅ PM2 daemon is running`);
     } catch (pingError) {
       console.log(`⚠️ PM2 daemon not responding, attempting to resurrect...`);
       try {
-        await run(`cmd /c "pm2 resurrect"`);
+        await run(wrapCommand("pm2 resurrect"));
         console.log(`✅ PM2 daemon resurrected`);
       } catch (resurrectError: any) {
         console.warn(`⚠️ Could not resurrect PM2 daemon: ${resurrectError?.error || 'Unknown error'}`);
@@ -83,17 +96,27 @@ export async function startWithPM2(id: string, projectPath: string, port: number
     // 2. Delete existing process with same name (if any)
     console.log(`🗑️ Cleaning up existing process with name: ${name}...`);
     try {
-      await run(`cmd /c "pm2 delete ${name}"`);
+      await run(wrapCommand(`pm2 delete ${name}`));
       console.log(`✅ Existing process deleted`);
     } catch (deleteError) {
       // Ignore error if process doesn't exist
       console.log(`ℹ️ No existing process found with name: ${name}`);
     }
 
-    // 3. Start with correct PORT env
+    // 3. Start with correct PORT env and NODE_OPTIONS for memory management
     console.log(`🚀 Starting application with PM2 on port ${port}...`);
-    const startCmd = `cmd /c "cd /d "${projectPath}" && set PORT=${port} && pm2 start index.js --name ${name}"`;
-    const result = await run(startCmd);
+
+    // Build the start command with memory options
+    let startCmd: string;
+    if (isWindows) {
+      // Windows: use 'set' for environment variables
+      startCmd = `cd /d "${projectPath}" && set PORT=${port} && set NODE_OPTIONS=--max-old-space-size=4096 && pm2 start npm --name ${name} -- run dev`;
+    } else {
+      // Unix/Linux: use export or inline env vars
+      startCmd = `cd "${projectPath}" && PORT=${port} NODE_OPTIONS="--max-old-space-size=4096" pm2 start npm --name ${name} -- run dev`;
+    }
+
+    const result = await run(wrapCommand(startCmd));
 
     console.log(`✅ Application started successfully with PM2`);
     console.log(`📊 PM2 Output: ${result.stdout}`);
@@ -133,7 +156,7 @@ export async function stopPM2Process(id: string): Promise<{ status: string; proc
 
     // Delete the PM2 process
     try {
-      const result = await run(`cmd /c "pm2 delete ${id}"`);
+      const result = await run(wrapCommand(`pm2 delete ${id}`));
       console.log(`✅ PM2 process ${id} stopped and removed successfully`);
       console.log(`📊 PM2 Output: ${result.stdout}`);
 
