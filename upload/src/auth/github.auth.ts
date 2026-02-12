@@ -40,13 +40,11 @@ router.get("/github/callback", async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Token not received" });
     }
 
-    // Determine environment
     const isProduction = process.env.NODE_ENV === "production";
 
-    // Determine frontend URL from env or use defaults
     const frontendUrl = (process.env.FRONTEND_URL ||
       (isProduction ? "https://devdep.dpdns.org" : "http://localhost:5173")
-    ).replace(/\/$/, ""); // Remove trailing slash
+    ).replace(/\/$/, "");
 
     // Set cookie with appropriate domain for cross-subdomain access
     res.cookie("github_token", accessToken, {
@@ -60,7 +58,6 @@ router.get("/github/callback", async (req: Request, res: Response) => {
 
     // Redirect to dashboard route
     const redirectUrl = `${frontendUrl}/dashboard`;
-    console.log(`Redirecting to: ${redirectUrl}`);
     res.redirect(redirectUrl);
   } catch (error: any) {
     console.error("OAuth callback error:", error?.message || error);

@@ -153,6 +153,18 @@ export default function Dashboard() {
     return "";
   };
 
+  const formatStatusText = (status?: DeployStatus | "Unknown") => {
+    if (!status) return "Loading status...";
+
+    // If the status starts with "Failed" and is longer than 20 characters,
+    // just show "Deployment Failed" to prevent overflow
+    if (status.toLowerCase().startsWith("failed") && status.length > 20) {
+      return "Deployment Failed";
+    }
+
+    return status;
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const months = [
@@ -386,9 +398,9 @@ export default function Dashboard() {
                       )}
                       <Badge
                         variant={getStatusVariant(statuses[project.id])}
-                        className={getStatusClassName(statuses[project.id])}
+                        className={`${getStatusClassName(statuses[project.id])} truncate max-w-full`}
                       >
-                        {statuses[project.id] ?? "Loading status..."}
+                        {formatStatusText(statuses[project.id])}
                       </Badge>
                     </div>
                   </CardContent>
