@@ -1,57 +1,12 @@
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
+import { execInDirectory } from "./config/commandRunner";
 import { getFreePort } from "./portManager";
 import { startWithPM2 } from "./pm2Runner";
+import { writeEnvFile } from "./writeEnvFile";
+import { DeployProject } from "./types";
 
-function execPromise(cmd: string, cwd: string) {
-  return new Promise((resolve, reject) => {
-    try {
-      // Validation: Check if cwd exists
-      if (!fs.existsSync(cwd)) {
-        return reject(new Error(`Directory does not exist: ${cwd}`));
-      }
-
-      exec(cmd, { cwd }, (err, stdout, stderr) => {
-        if (err) {
-          reject(new Error(stderr || err.message || "Command execution failed"));
-        } else {
-          resolve(stdout);
-        }
-      });
-    } catch (error: any) {
-      reject(new Error(`Failed to execute command: ${error?.message || 'Unknown error'}`));
-    }
-  });
-}
-
-function writeEnvFile(projectPath: string, envObject: any) {
-  try {
-    // Validation: Check if projectPath exists
-    if (!fs.existsSync(projectPath)) {
-      throw new Error(`Project path does not exist: ${projectPath}`);
-    }
-
-    const envLines: string[] = [];
-
-    if (envObject && typeof envObject === 'object') {
-      for (const key in envObject) {
-        if (envObject[key] !== null && envObject[key] !== undefined) {
-          envLines.push(`${key.toUpperCase()}=${envObject[key]}`);
-        }
-      }
-    }
-
-    const envContent = envLines.join("\n");
-    const envFilePath = path.join(projectPath, ".env");
-    fs.writeFileSync(envFilePath, envContent);
-    console.log(`✅ Environment file created at: ${envFilePath}`);
-  } catch (error: any) {
-    throw new Error(`Failed to write .env file: ${error?.message || 'Unknown error'}`);
-  }
-}
-
-export async function deployNodeProject(id: string, project: any) {
+export async function deployNodeProject(id: string, project: DeployProject) {
   try {
     // Validation: Check required parameters
     if (!id || typeof id !== 'string' || id.trim().length === 0) {
@@ -97,20 +52,20 @@ export async function deployNodeProject(id: string, project: any) {
     // Install dependencies
     try {
       console.log("📦 Dependencies downloading...");
-      await execPromise("npm install", projectPath);
+      await execInDirectory(projectPath, "npm", ["install"]);
       console.log("✅ Dependencies installed successfully");
     } catch (error: any) {
-      throw new Error(`Failed to install dependencies: ${error?.message || 'Unknown error'}`);
+      throw new Error(`Failed to install dependencies: ${error?.error || error?.message || 'Unknown error'}`);
     }
 
     // Build project if build script exists
     if (pkg.scripts?.build) {
       try {
         console.log("🔨 Building started...");
-        await execPromise("npm run build", projectPath);
+        await execInDirectory(projectPath, "npm", ["run", "build"]);
         console.log("✅ Building ended successfully");
       } catch (error: any) {
-        throw new Error(`Build failed: ${error?.message || 'Unknown error'}`);
+        throw new Error(`Build failed: ${error?.error || error?.message || 'Unknown error'}`);
       }
     } else {
       console.log("ℹ️ No build script found, skipping build step");
@@ -128,7 +83,7 @@ export async function deployNodeProject(id: string, project: any) {
 
     // Start with PM2
     console.log("🚀 Starting application with PM2...");
-    const result = await startWithPM2(id, projectPath, port);
+    const result = await startWithPM2(id, projectPath, port, "NODE");
 
     if (result.status === "failed") {
       throw new Error(`PM2 startup failed: ${result.error || 'Unknown error'}`);

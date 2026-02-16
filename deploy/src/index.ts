@@ -1,11 +1,13 @@
 import 'dotenv/config';
-import { copyFinalDist, downloadS3Folder } from './aws';
-import { client } from './redis'
+import { copyFinalDist, downloadS3Folder } from './config/aws';
+import { client } from './config/redis'
 import { buildProject } from './utils';
-import { pool } from './db';
+import { pool } from './config/db';
 import { deployNodeProject } from './deployNode';
+import { DeployProject } from './types';
 import path from 'path';
 import simpleGit from 'simple-git';
+import { deployNextProject } from './deployNext';
 
 async function main() {
     try {
@@ -30,7 +32,7 @@ async function main() {
                 console.log("--------------------------------------------------");
 
                 // Fetch project from database
-                let project: any = null;
+                let project: DeployProject | null = null;
                 try {
                     console.log(`🔍 Fetching project details for ID: ${id}...`);
                     const result = await pool.query('SELECT * FROM "Deploy" WHERE id = $1', [id]);
@@ -42,7 +44,7 @@ async function main() {
                     }
 
                     project = result.rows[0];
-                    console.log(`✅ Project found: ${project.framework || 'Unknown'} framework`);
+                    console.log(`✅ Project found: ${project?.framework || 'Unknown'} framework`);
                 } catch (err: any) {
                     console.error(`❌ Error loading deploy row for id ${id}:`, err?.message || err);
                     await client.set(`${id}:status`, `Failed - Database error: ${err?.message || 'Unknown error'}`);
@@ -56,15 +58,18 @@ async function main() {
                     continue;
                 }
 
+                // At this point, project is guaranteed to be non-null
+                const validProject: DeployProject = project;
+
                 console.log("--------------------------------------------------");
 
                 // Clone repository from Git
                 try {
 
                     console.log(`📥 Cloning repository for ID: ${id}...`);
-                    console.log(`🔗 Repository URL: ${project.repoUrl}`);
+                    console.log(`🔗 Repository URL: ${validProject.repoUrl}`);
                     const baseDir = path.join(__dirname, "output", id);
-                    await simpleGit().clone(project.repoUrl, baseDir);
+                    await simpleGit().clone(validProject.repoUrl, baseDir);
                     console.log(`✅ Repository cloned successfully to: ${baseDir}`);
                     await client.set(`${id}:status`, "Deploying");
                 } catch (err: any) {
@@ -76,7 +81,7 @@ async function main() {
                 console.log("--------------------------------------------------");
 
                 // Process based on framework
-                if (project.framework === "React") {
+                if (validProject.framework === "React") {
                     try {
                         console.log(`⚛️ React project detected, starting build process...`);
                         console.log("📦 Dependencies downloading...");
@@ -92,10 +97,10 @@ async function main() {
                         await client.set(`${id}:status`, `Failed - Build error: ${err?.message || 'Unknown error'}`);
                         continue;
                     }
-                } else if (project.framework === "Node") {
+                } else if (validProject.framework === "Node") {
                     try {
                         console.log(`🟢 Node.js project detected, starting deployment...`);
-                        const result = await deployNodeProject(id, project);
+                        const result = await deployNodeProject(id, validProject);
                         console.log("--------------------------------------------------");
                         console.log(`✅ Node.js deployment completed successfully`);
                         console.log(`🔌 Assigned Port: ${result.port}`);
@@ -109,9 +114,26 @@ async function main() {
                         await client.set(`${id}:status`, `Failed - Deployment error: ${err?.message || 'Unknown error'}`);
                         continue;
                     }
+                } else if (validProject.framework === "Next.js") {
+                    try {
+                        console.log(`🟣 Next.js project detected, starting deployment...`);
+                        const result = await deployNextProject(id, validProject);
+                        console.log("--------------------------------------------------");
+                        console.log(`✅ Next.js deployment completed successfully`);
+                        console.log(`🔌 Assigned Port: ${result.port}`);
+                        console.log(`💾 Storing port in Redis cache...`);
+                        await client.set(`${id}:Port`, result.port);
+                        console.log(`✅ Port ${result.port} cached in Redis for deployment ID: ${id}`);
+                        console.log(`📍 Deployment accessible on port: ${result.port}`);
+
+                    } catch (err: any) {
+                        console.error(`❌ Error deploying Next.js project for id ${id}:`, err?.message || err);
+                        await client.set(`${id}:status`, `Failed - Deployment error: ${err?.message || 'Unknown error'}`);
+                        continue;
+                    }
                 } else {
-                    console.error(`❌ Unsupported framework: ${project.framework} for id ${id}`);
-                    await client.set(`${id}:status`, `Failed - Unsupported framework: ${project.framework}`);
+                    console.error(`❌ Unsupported framework: ${validProject.framework} for id ${id}`);
+                    await client.set(`${id}:status`, `Failed - Unsupported framework: ${validProject.framework}`);
                     continue;
                 }
 
@@ -119,7 +141,6 @@ async function main() {
                 try {
                     console.log("--------------------------------------------------");
                     console.log(`✅ Marking deployment as complete for ID: ${id}...`);
-                    await client.set(id, "Deployed");
                     await client.set(`${id}:status`, "Deployed");
                     console.log(`🎉 Deployment completed successfully for ID: ${id}`);
                 } catch (err: any) {
