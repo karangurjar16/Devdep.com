@@ -87,16 +87,21 @@ export async function downloadS3Folder(prefix: string): Promise<void> {
     }
 }
 
-export async function copyFinalDist(id: string): Promise<void> {
+export async function copyFinalDist(id: string, projectPath: string): Promise<void> {
     try {
         // Validation: Check if id is valid
         if (!id || typeof id !== 'string' || id.trim().length === 0) {
             throw new Error("Invalid deployment ID provided");
         }
 
-        let folderPath = path.join(__dirname, `output/${id}/dist`);
+        // Validation: Check if projectPath is valid
+        if (!projectPath || typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+            throw new Error("Invalid project path provided");
+        }
+
+        let folderPath = path.join(projectPath, 'dist');
         if (!fs.existsSync(folderPath)) {
-            folderPath = path.join(__dirname, `output/${id}/build`);
+            folderPath = path.join(projectPath, 'build');
         }
 
         // Validation: Check if dist folder exists

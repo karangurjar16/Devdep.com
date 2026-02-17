@@ -8,6 +8,7 @@ import { DeployProject } from './types';
 import path from 'path';
 import simpleGit from 'simple-git';
 import { deployNextProject } from './deployNext';
+import fs from 'fs';
 
 async function main() {
     try {
@@ -64,6 +65,7 @@ async function main() {
                 console.log("--------------------------------------------------");
 
                 // Clone repository from Git
+                let projectPath: string;
                 try {
 
                     console.log(`📥 Cloning repository for ID: ${id}...`);
@@ -71,6 +73,22 @@ async function main() {
                     const baseDir = path.join(__dirname, "output", id);
                     await simpleGit().clone(validProject.repoUrl, baseDir);
                     console.log(`✅ Repository cloned successfully to: ${baseDir}`);
+
+                    // Calculate project path based on rootDir
+                    if (validProject.rootDir && validProject.rootDir.trim().length > 0) {
+                        projectPath = path.join(baseDir, validProject.rootDir);
+                        console.log(`📂 Using rootDir: ${validProject.rootDir}`);
+                        console.log(`📁 Project path: ${projectPath}`);
+
+                        // Validation: Check if rootDir exists
+                        if (!fs.existsSync(projectPath)) {
+                            throw new Error(`Root directory does not exist: ${projectPath}`);
+                        }
+                    } else {
+                        projectPath = baseDir;
+                        console.log(`📁 Project path (no rootDir): ${projectPath}`);
+                    }
+
                     await client.set(`${id}:status`, "Deploying");
                 } catch (err: any) {
                     console.error(`❌ Error cloning repository for id ${id}:`, err?.message || err);
@@ -85,12 +103,12 @@ async function main() {
                     try {
                         console.log(`⚛️ React project detected, starting build process...`);
                         console.log("📦 Dependencies downloading...");
-                        await buildProject(id);
+                        await buildProject(projectPath);
                         console.log("✅ Build completed successfully");
 
                         console.log("--------------------------------------------------");
                         console.log(`📤 Uploading final distribution for ID: ${id}...`);
-                        await copyFinalDist(id);
+                        await copyFinalDist(id, projectPath);
                         console.log(`✅ Distribution uploaded successfully for ID: ${id}`);
                     } catch (err: any) {
                         console.error(`❌ Error building React project for id ${id}:`, err?.message || err);
@@ -100,7 +118,7 @@ async function main() {
                 } else if (validProject.framework === "Node") {
                     try {
                         console.log(`🟢 Node.js project detected, starting deployment...`);
-                        const result = await deployNodeProject(id, validProject);
+                        const result = await deployNodeProject(id, projectPath, validProject);
                         console.log("--------------------------------------------------");
                         console.log(`✅ Node.js deployment completed successfully`);
                         console.log(`🔌 Assigned Port: ${result.port}`);
@@ -117,7 +135,7 @@ async function main() {
                 } else if (validProject.framework === "Next.js") {
                     try {
                         console.log(`🟣 Next.js project detected, starting deployment...`);
-                        const result = await deployNextProject(id, validProject);
+                        const result = await deployNextProject(id, projectPath, validProject);
                         console.log("--------------------------------------------------");
                         console.log(`✅ Next.js deployment completed successfully`);
                         console.log(`🔌 Assigned Port: ${result.port}`);

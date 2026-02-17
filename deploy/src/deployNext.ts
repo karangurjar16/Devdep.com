@@ -6,14 +6,16 @@ import { startWithPM2 } from "./pm2Runner";
 import { writeEnvFile } from "./writeEnvFile";
 import { DeployProject } from "./types";
 
-export async function deployNextProject(id: string, project: DeployProject) {
+export async function deployNextProject(id: string, projectPath: string, project: DeployProject) {
     try {
         // Validation: Check required parameters
         if (!id || typeof id !== 'string' || id.trim().length === 0) {
             throw new Error("Invalid deployment ID provided");
         }
 
-        const projectPath = path.join(process.cwd(), "dist/output", id);
+        if (!projectPath || typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+            throw new Error("Invalid project path provided");
+        }
 
         // Validation: Check if project directory exists
         if (!fs.existsSync(projectPath)) {
