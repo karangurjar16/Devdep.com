@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getDeployedProjects,
   getDeployStatus,
+  logout,
   type DeployedProject,
   type DeployStatus,
 } from "@/api/github";
@@ -21,6 +22,7 @@ import {
   Folder,
   Globe,
   Trash2,
+  LogOut,
 } from "lucide-react";
 import DropdownMenu, { type MenuOption } from "@/components/DropdownMenu";
 import AddDomainDialog from "@/components/AddDomainDialog";
@@ -33,6 +35,17 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<DeployedProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      // Always redirect to login, even if the request failed
+      navigate("/", { replace: true });
+    }
+  };
   const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
   const [isAddDomainDialogOpen, setIsAddDomainDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -120,48 +133,27 @@ export default function Dashboard() {
 
   const getStatusVariant = (status?: DeployStatus | "Unknown") => {
     if (!status) return "outline" as const;
-
-    const value = status.toLowerCase();
-
-    // Check if status starts with "Failed" (case-insensitive)
-    if (value.startsWith("failed")) {
-      return "destructive" as const;
-    }
-
-    switch (value) {
-      case "uploading":
-      case "deploying":
-        return "secondary" as const;
-      case "deployed":
-      case "running":
-        return "default" as const;
-      default:
-        return "outline" as const;
+    switch (status) {
+      case "Failed": return "destructive" as const;
+      case "Deployed": return "default" as const;
+      case "Queued":
+      case "Cloning":
+      case "Building":
+      case "Deploying": return "secondary" as const;
+      default: return "outline" as const;
     }
   };
 
   const getStatusClassName = (status?: DeployStatus | "Unknown") => {
-    if (!status) return "";
-
-    const value = status.toLowerCase();
-
-    // Green color for "Deployed" status
-    if (value === "deployed") {
-      return "bg-green-500 text-white border-transparent hover:bg-green-600";
-    }
-
+    if (status === "Deployed") return "bg-green-500 text-white border-transparent hover:bg-green-600";
+    if (status === "Failed") return "bg-red-500/80 text-white border-transparent";
+    if (status === "Queued" || status === "Cloning" || status === "Building" || status === "Deploying")
+      return "bg-amber-500/80 text-white border-transparent";
     return "";
   };
 
   const formatStatusText = (status?: DeployStatus | "Unknown") => {
-    if (!status) return "Loading status...";
-
-    // If the status starts with "Failed" and is longer than 20 characters,
-    // just show "Deployment Failed" to prevent overflow
-    if (status.toLowerCase().startsWith("failed") && status.length > 20) {
-      return "Deployment Failed";
-    }
-
+    if (!status) return "Loading...";
     return status;
   };
 
@@ -274,12 +266,23 @@ export default function Dashboard() {
               <h1 className="text-3xl font-bold text-white">Projects</h1>
               <p className="text-sm text-muted-foreground mt-1">Manage your deployed applications</p>
             </div>
-            <Button
-              onClick={() => navigate("/my-projects")}
-              className="btn-glossy"
-            >
-              Import New Project
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => navigate("/my-projects")}
+                className="btn-glossy"
+              >
+                Import New Project
+              </Button>
+              <Button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 hover:text-white gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                {loggingOut ? "Logging out..." : "Logout"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

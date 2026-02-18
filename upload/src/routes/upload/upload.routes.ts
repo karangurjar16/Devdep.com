@@ -22,15 +22,15 @@ router.post("/deploy", async (req, res) => {
         rootDir: repo?.rootDir,
     });
 
-    console.log(`[deploy:${id}] Step: set status -> Uploading`);
-    await client.set(id, "Uploading");
+    // Set initial status — key is always `${id}:status`
+    await client.set(`${id}:status`, "Queued");
+    console.log(`[deploy:${id}] Status set to Queued`);
 
     const repoUrl = `https://github.com/${repo.owner}/${repo.repo}`;
     const baseDir = path.join(__dirname, "output", id);
-    console.log(`[deploy:${id}] Computed repoUrl/baseDir`, { repoUrl, baseDir });
 
     try {
-        console.log(`[deploy:${id}] Step: saving deployment record to DB`);
+        console.log(`[deploy:${id}] Saving deployment record to DB`);
         await prisma.deploy.create({
             data: {
                 id,
@@ -51,9 +51,7 @@ router.post("/deploy", async (req, res) => {
 
     } catch (error) {
         console.error(`[deploy:${id}] Error during deploy`, error);
-        console.log(`[deploy:${id}] Step: set status -> Failed`);
-        await client.set(id, "Failed");
-
+        await client.set(`${id}:status`, "Failed");
         res.status(500).json({ error: "Deployment failed" });
     }
 });
@@ -125,10 +123,9 @@ router.delete("/deploy/:id", async (req, res) => {
             // Continue with deletion even if domain cleanup fails
         }
 
-        // Delete Redis status keys
-        console.log(`[delete:${id}] Cleaning up Redis status keys...`);
+        // Delete Redis status and port keys
+        console.log(`[delete:${id}] Cleaning up Redis keys...`);
         try {
-            await client.del(id);
             await client.del(`${id}:status`);
             await client.del(`${id}:Port`);
         } catch (error: any) {

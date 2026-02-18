@@ -1,11 +1,4 @@
-/**
- * TypeScript interfaces for the Deploy service
- */
 
-/**
- * Represents a deployment project from the database
- * Matches the Deploy model from Prisma schema
- */
 export interface DeployProject {
     id: string;
     email: string;
@@ -17,9 +10,7 @@ export interface DeployProject {
     createdAt: Date;
 }
 
-/**
- * Environment variables object type
- */
+
 export interface EnvVariables {
     [key: string]: string | number | boolean;
 }
