@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import { execInDirectory, chainCommands } from "./config/commandRunner";
+import { execInDirectory } from "./config/commandRunner";
 
 export async function buildProject(projectPath: string): Promise<string> {
     try {
@@ -21,19 +21,30 @@ export async function buildProject(projectPath: string): Promise<string> {
         }
 
         console.log(`📁 Building project at: ${projectPath}`);
-        console.log("📦 Dependencies downloading...");
 
-        // Use the new command runner for OS-agnostic execution
-        const result = await execInDirectory(
+        // ── Step 1: Install dependencies ────────────────────────────────────
+        console.log("📦 Installing dependencies...");
+        const installResult = await execInDirectory(projectPath, "npm install");
+        if (installResult.stderr) {
+            console.warn(`⚠️ Install warnings: ${installResult.stderr}`);
+        }
+        console.log("✅ Dependencies installed");
+
+        // ── Step 2: Build with increased heap memory ─────────────────────────
+        // Vite/webpack builds can exceed the default 512 MB Node.js heap on
+        // low-memory servers — bump it to 1536 MB to prevent OOM crashes.
+        console.log("🔨 Building project (NODE_OPTIONS=--max-old-space-size=1536)...");
+        const buildResult = await execInDirectory(
             projectPath,
-            chainCommands(["npm install", "npm run build"])
+            "NODE_OPTIONS=--max-old-space-size=1536 npm run build"
         );
 
-        console.log("✅ Building ended successfully");
-        console.log(`📊 Build output: ${result.stdout}`);
-
-        if (result.stderr) {
-            console.warn(`⚠️ Build warnings: ${result.stderr}`);
+        console.log("✅ Build completed successfully");
+        if (buildResult.stdout) {
+            console.log(`📊 Build output: ${buildResult.stdout}`);
+        }
+        if (buildResult.stderr) {
+            console.warn(`⚠️ Build warnings: ${buildResult.stderr}`);
         }
 
         return "Build completed successfully";
@@ -42,3 +53,4 @@ export async function buildProject(projectPath: string): Promise<string> {
         throw new Error(`Failed to build project: ${error?.error || error?.message || 'Unknown error'}`);
     }
 }
+

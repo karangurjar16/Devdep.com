@@ -19,9 +19,34 @@ function getCookieOptions(isProduction: boolean) {
     httpOnly: true,
     secure: isProduction,
     sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
-    domain: isProduction ? ".dpdns.org" : undefined,
+    domain: isProduction ? ".devdep.dpdns.org" : undefined,
     path: "/",
   };
+}
+
+// ─── Stateless HMAC state helpers (no cookie needed) ────────────────────────
+
+function generateState(): string {
+  const timestamp = Date.now().toString();
+  const secret = process.env.GITHUB_CLIENT_SECRET || "fallback-secret";
+  const hmac = crypto.createHmac("sha256", secret).update(timestamp).digest("hex");
+  return `${timestamp}.${hmac}`;
+}
+
+function verifyState(state: string): boolean {
+  try {
+    const [timestamp, hmac] = state.split(".");
+    if (!timestamp || !hmac) return false;
+
+    // Reject tokens older than 10 minutes
+    if (Date.now() - parseInt(timestamp) > 10 * 60 * 1000) return false;
+
+    const secret = process.env.GITHUB_CLIENT_SECRET || "fallback-secret";
+    const expected = crypto.createHmac("sha256", secret).update(timestamp).digest("hex");
+    return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
 // ─── GET /auth/github — Start OAuth flow ────────────────────────────────────
@@ -35,30 +60,19 @@ router.get("/github", (_req: Request, res: Response) => {
     return res.status(500).json({ message: "OAuth not configured" });
   }
 
-  // Generate a random CSRF state token
-  const state = crypto.randomBytes(16).toString("hex");
-
-  const isProduction = process.env.NODE_ENV === "production";
-
-  // Store state in a short-lived cookie (10 minutes)
-  res.cookie("oauth_state", state, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    domain: isProduction ? ".dpdns.org" : undefined,
-    maxAge: 10 * 60 * 1000, // 10 minutes
-    path: "/",
-  });
+  // Generate a stateless HMAC-signed state token (no cookie needed)
+  const state = generateState();
 
   const url =
     `https://github.com/login/oauth/authorize` +
     `?client_id=${clientId}` +
     `&redirect_uri=${encodeURIComponent(callbackUrl)}` +
     `&scope=repo%20user` +
-    `&state=${state}`;
+    `&state=${encodeURIComponent(state)}`;
 
   res.redirect(url);
 });
+
 
 // ─── GET /auth/github/callback — Handle OAuth callback ──────────────────────
 
@@ -68,20 +82,10 @@ router.get("/github/callback", async (req: Request, res: Response) => {
 
   const code = req.query.code as string;
   const returnedState = req.query.state as string;
-  const storedState = req.cookies?.oauth_state as string;
 
-  // Clear the state cookie immediately (one-time use)
-  res.clearCookie("oauth_state", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    domain: isProduction ? ".dpdns.org" : undefined,
-    path: "/",
-  });
-
-  // Validate CSRF state
-  if (!returnedState || !storedState || returnedState !== storedState) {
-    console.error("❌ OAuth state mismatch — possible CSRF attack");
+  // Validate HMAC-signed state (no cookie needed)
+  if (!returnedState || !verifyState(decodeURIComponent(returnedState))) {
+    console.error("❌ OAuth state invalid or expired — possible CSRF attack");
     return res.redirect(`${frontendUrl}/?error=invalid_state`);
   }
 
