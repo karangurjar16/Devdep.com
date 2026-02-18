@@ -5,6 +5,7 @@ import { getFreePort } from "./portManager";
 import { startWithPM2 } from "./pm2Runner";
 import { writeEnvFile } from "./writeEnvFile";
 import { DeployProject } from "./types";
+import { getEntryFile } from "./utils/parseStartScript";
 
 export async function deployNextProject(id: string, projectPath: string, project: DeployProject) {
     try {
@@ -83,9 +84,14 @@ export async function deployNextProject(id: string, projectPath: string, project
         }
 
 
+        // Detect entry file
+        console.log("🔍 Detecting entry file...");
+        const entryFile = getEntryFile(projectPath, pkg, "NEXT");
+        console.log(`✅ Entry file detected: ${entryFile}`);
+
         // Start with PM2
         console.log("🚀 Starting application with PM2...");
-        const result = await startWithPM2(id, projectPath, port, "NEXT");
+        const result = await startWithPM2(id, projectPath, port, "NEXT", pkg, entryFile);
 
         if (result.status === "failed") {
             throw new Error(`PM2 startup failed: ${result.error || 'Unknown error'}`);

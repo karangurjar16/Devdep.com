@@ -5,6 +5,7 @@ import { getFreePort } from "./portManager";
 import { startWithPM2 } from "./pm2Runner";
 import { writeEnvFile } from "./writeEnvFile";
 import { DeployProject } from "./types";
+import { getEntryFile } from "./utils/parseStartScript";
 
 export async function deployNodeProject(id: string, projectPath: string, project: DeployProject) {
   try {
@@ -27,14 +28,6 @@ export async function deployNodeProject(id: string, projectPath: string, project
     }
 
     console.log(`📁 Project path: ${projectPath}`);
-
-    // Create .env from DB row
-    try {
-      console.log("📝 Creating environment file...");
-      writeEnvFile(projectPath, project.env || {});
-    } catch (error: any) {
-      throw new Error(`Failed to create environment file: ${error?.message || 'Unknown error'}`);
-    }
 
     // Read and validate package.json
     let pkg: any;
@@ -60,6 +53,28 @@ export async function deployNodeProject(id: string, projectPath: string, project
       throw new Error(`Failed to install dependencies: ${error?.error || error?.message || 'Unknown error'}`);
     }
 
+    // Get free port
+    let port: number;
+    try {
+      console.log("🔌 Allocating free port...");
+      port = getFreePort();
+      console.log(`✅ Port ${port} allocated successfully`);
+    } catch (error: any) {
+      throw new Error(`Failed to allocate port: ${error?.message || 'Unknown error'}`);
+    }
+
+    // Create .env from DB row (WITH PORT)
+    try {
+      console.log("📝 Creating environment file...");
+      writeEnvFile(projectPath, {
+        ...(project.env || {}),
+        PORT: String(port),
+        NODE_ENV: "production"
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to create environment file: ${error?.message || 'Unknown error'}`);
+    }
+
     // Build project if build script exists
     if (pkg.scripts?.build) {
       try {
@@ -73,19 +88,15 @@ export async function deployNodeProject(id: string, projectPath: string, project
       console.log("ℹ️ No build script found, skipping build step");
     }
 
-    // Get free port
-    let port: number;
-    try {
-      console.log("🔌 Allocating free port...");
-      port = getFreePort();
-      console.log(`✅ Port ${port} allocated successfully`);
-    } catch (error: any) {
-      throw new Error(`Failed to allocate port: ${error?.message || 'Unknown error'}`);
-    }
+
+    // Detect entry file
+    console.log("🔍 Detecting entry file...");
+    const entryFile = getEntryFile(projectPath, pkg, "NODE");
+    console.log(`✅ Entry file detected: ${entryFile}`);
 
     // Start with PM2
     console.log("🚀 Starting application with PM2...");
-    const result = await startWithPM2(id, projectPath, port, "NODE");
+    const result = await startWithPM2(id, projectPath, port, "NODE", pkg, entryFile);
 
     if (result.status === "failed") {
       throw new Error(`PM2 startup failed: ${result.error || 'Unknown error'}`);

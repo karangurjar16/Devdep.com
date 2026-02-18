@@ -4,7 +4,14 @@ import { execCommand, execInDirectory, execWithEnv, chainCommands, buildCdComman
 
 export type ProjectType = "NODE" | "NEXT";
 
-export async function startWithPM2(id: string, projectPath: string, port: number, projectType: ProjectType = "NODE") {
+export async function startWithPM2(
+  id: string,
+  projectPath: string,
+  port: number,
+  projectType: ProjectType = "NODE",
+  pkg?: any,
+  entryFile?: string
+) {
   const name = id;
 
   try {
@@ -26,17 +33,9 @@ export async function startWithPM2(id: string, projectPath: string, port: number
       throw new Error(`Project path does not exist: ${projectPath}`);
     }
 
-    // Validation: Check project-specific requirements
-    if (projectType === "NODE") {
-      const indexJsPath = path.join(projectPath, "index.js");
-      if (!fs.existsSync(indexJsPath)) {
-        throw new Error(`index.js not found at: ${indexJsPath}`);
-      }
-    } else if (projectType === "NEXT") {
-      const packageJsonPath = path.join(projectPath, "package.json");
-      if (!fs.existsSync(packageJsonPath)) {
-        throw new Error(`package.json not found at: ${packageJsonPath}`);
-      }
+    // Validation: Check if entry file is provided
+    if (!entryFile) {
+      throw new Error("Entry file must be provided");
     }
 
     console.log(`🔧 Initializing PM2 daemon...`);
@@ -65,26 +64,16 @@ export async function startWithPM2(id: string, projectPath: string, port: number
       console.log(`ℹ️ No existing process found with name: ${name}`);
     }
 
-    // 3. Start with correct PORT env based on project type
+    // 3. Start with correct PORT env based on project type and entry file
     let result;
 
-    if (projectType === "NODE") {
-      // Node.js project - start with index.js
-      console.log(`🚀 Starting NODE.js application with PM2 on port ${port}...`);
+    console.log(`🚀 Starting ${projectType} application with PM2 on port ${port}...`);
+    console.log(`📝 Entry file: ${entryFile}`);
 
-      result = await execInDirectory(
-        projectPath,
-        chainCommands([
-          `set PORT=${port}`,
-          `pm2 start index.js --name ${name}`
-        ])
-      );
-
-      console.log(`✅ Node.js application started successfully with PM2`);
-
-    } else if (projectType === "NEXT") {
-      // Next.js project - start with npm start
-      console.log(`🚀 Starting Next.js application with PM2 on port ${port}...`);
+    // Check if this is a Next.js project that needs npm start
+    if (entryFile === 'NEXT_START') {
+      // Next.js project - use npm start
+      console.log(`ℹ️ Using npm start for Next.js project`);
 
       // Build the command chain: cd to directory, set env vars, and run pm2
       const cdCommand = buildCdCommand(projectPath);
@@ -99,12 +88,21 @@ export async function startWithPM2(id: string, projectPath: string, port: number
       result = await execCommand(
         chainCommands([cdCommand, ...envCommands, pm2Command])
       );
-
-      console.log(`✅ Next.js application started successfully with PM2`);
-
     } else {
-      throw new Error(`Unsupported project type: ${projectType}`);
+      // Standard Node.js project - start with the detected entry file
+      console.log(`ℹ️ Using entry file: ${entryFile}`);
+
+      result = await execInDirectory(
+        projectPath,
+        chainCommands([
+          `set PORT=${port}`,
+          `set NODE_ENV=production`,
+          `pm2 start ${entryFile} --name ${name}`
+        ])
+      );
     }
+
+    console.log(`✅ Application started successfully with PM2`);
 
     console.log(`📊 PM2 Output: ${result.stdout}`);
 
