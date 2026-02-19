@@ -54,7 +54,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     getDeployedProjects()
-      .then(setProjects)
+      .then((data) => {
+        const sorted = [...data].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setProjects(sorted);
+      })
       .catch(() => setError("Unable to load deployed projects"))
       .finally(() => setLoading(false));
   }, []);
