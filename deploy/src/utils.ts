@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import { execInDirectory } from "./config/commandRunner";
+import { execInDirectory, execInDirectoryWithEnv } from "./config/commandRunner";
 
 export async function buildProject(projectPath: string): Promise<string> {
     try {
@@ -34,9 +34,11 @@ export async function buildProject(projectPath: string): Promise<string> {
         // Vite/webpack builds can exceed the default 512 MB Node.js heap on
         // low-memory servers — bump it to 1536 MB to prevent OOM crashes.
         console.log("🔨 Building project (NODE_OPTIONS=--max-old-space-size=1536)...");
-        const buildResult = await execInDirectory(
+        const buildResult = await execInDirectoryWithEnv(
             projectPath,
-            "NODE_OPTIONS=--max-old-space-size=1536 npm run build"
+            { NODE_OPTIONS: "--max-old-space-size=1536" },
+            "npm",
+            ["run", "build"]
         );
 
         console.log("✅ Build completed successfully");

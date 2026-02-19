@@ -70,24 +70,49 @@ export async function startWithPM2(
     console.log(`🚀 Starting ${projectType} application with PM2 on port ${port}...`);
     console.log(`📝 Entry file: ${entryFile}`);
 
-    // Check if this is a Next.js project that needs npm start
+    // Check if this is a Next.js project that needs to be started via next binary
     if (entryFile === 'NEXT_START') {
-      // Next.js project - use npm start
-      console.log(`ℹ️ Using npm start for Next.js project`);
+      // Check for standalone server.js first (most efficient - requires output: 'standalone' in next.config.js)
+      const standaloneServer = path.join(projectPath, '.next', 'standalone', 'server.js');
+      if (fs.existsSync(standaloneServer)) {
+        console.log(`ℹ️ Using Next.js standalone server: ${standaloneServer}`);
+        result = await execCommand(
+          chainCommands([
+            buildCdCommand(projectPath),
+            `pm2 start ${standaloneServer} --name ${name} --env production`
+          ])
+        );
+      } else {
+        // Fallback: run the next binary directly from node_modules
+        // This is more reliable than `npm start` because PM2 can manage the process directly
+        console.log(`ℹ️ Using next binary for Next.js project`);
 
-      // Build the command chain: cd to directory, set env vars, and run pm2
-      const cdCommand = buildCdCommand(projectPath);
-      const envCommands = [
-        `set PORT=${port}`,
-        `set NODE_ENV=production`
-      ];
-      // Use npm.cmd on Windows to avoid PM2 trying to execute the batch file directly
-      const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      const pm2Command = `pm2 start ${npmExecutable} --name ${name} -- start`;
+        // Try to find the direct JS file first (most reliable for PM2 across platforms)
+        let nextExecutable = path.join(projectPath, 'node_modules', 'next', 'dist', 'bin', 'next');
 
-      result = await execCommand(
-        chainCommands([cdCommand, ...envCommands, pm2Command])
-      );
+        if (!fs.existsSync(nextExecutable)) {
+          // Fallback to the .bin wrapper
+          const isWindows = process.platform === 'win32';
+          nextExecutable = path.join(projectPath, 'node_modules', '.bin', isWindows ? 'next.cmd' : 'next');
+        }
+
+        console.log(`ℹ️ Resolved Next.js executable: ${nextExecutable}`);
+
+        // Set environment variables before running PM2
+        const isWindows = process.platform === 'win32';
+        // Chain commands: cd -> set env -> pm2 start
+        // Note: chainCommands handles the '&&' joining.
+        // We set NODE_ENV=production.
+        const setEnv = isWindows ? `set NODE_ENV=production` : `export NODE_ENV=production`;
+
+        result = await execCommand(
+          chainCommands([
+            buildCdCommand(projectPath),
+            setEnv,
+            `pm2 start "${nextExecutable}" --name ${name} -- start -p ${port}`
+          ])
+        );
+      }
     } else {
       // Standard Node.js project - start with the detected entry file
       console.log(`ℹ️ Using entry file: ${entryFile}`);

@@ -64,12 +64,13 @@ async function main() {
 
                 console.log("--------------------------------------------------");
 
-                // Clone repository from Git
-                let projectPath: string;
+                const baseDir = path.join(__dirname, "output", id);
+                let projectPath: string = baseDir;
+
                 try {
+                    // Clone repository from Git
                     console.log(`📥 Cloning repository for ID: ${id}...`);
                     console.log(`🔗 Repository URL: ${validProject.repoUrl}`);
-                    const baseDir = path.join(__dirname, "output", id);
 
                     await client.set(`${id}:status`, "Cloning");
                     await simpleGit().clone(validProject.repoUrl, baseDir);
@@ -84,21 +85,13 @@ async function main() {
                         if (!fs.existsSync(projectPath)) {
                             throw new Error(`Root directory does not exist: ${projectPath}`);
                         }
-                    } else {
-                        projectPath = baseDir;
                     }
+
                     console.log(`📁 Project path: ${projectPath}`);
-                } catch (err: any) {
-                    console.error(`❌ Error cloning repository for id ${id}:`, err?.message || err);
-                    await client.set(`${id}:status`, "Failed");
-                    continue;
-                }
+                    console.log("--------------------------------------------------");
 
-                console.log("--------------------------------------------------");
-
-                // Process based on framework
-                if (validProject.framework === "React") {
-                    try {
+                    // Process based on framework
+                    if (validProject.framework === "React") {
                         console.log(`⚛️ React project detected, starting build process...`);
                         await client.set(`${id}:status`, "Building");
                         await buildProject(projectPath);
@@ -108,44 +101,45 @@ async function main() {
                         console.log(`📤 Uploading final distribution for ID: ${id}...`);
                         await copyFinalDist(id, projectPath);
                         console.log(`✅ Distribution uploaded successfully for ID: ${id}`);
-                    } catch (err: any) {
-                        console.error(`❌ Error building React project for id ${id}:`, err?.message || err);
-                        await client.set(`${id}:status`, "Failed");
-                        continue;
-                    }
-                } else if (validProject.framework === "Node") {
-                    try {
+
+                        console.log(`🧹 Cleaning up React build files for ID: ${id}`);
+                        fs.rmSync(baseDir, { recursive: true, force: true });
+
+                    } else if (validProject.framework === "Node") {
                         console.log(`🟢 Node.js project detected, starting deployment...`);
                         await client.set(`${id}:status`, "Deploying");
                         const result = await deployNodeProject(id, projectPath, validProject);
                         console.log(`✅ Node.js deployment completed. Port: ${result.port}`);
                         await client.set(`${id}:Port`, result.port);
-                    } catch (err: any) {
-                        console.error(`❌ Error deploying Node.js project for id ${id}:`, err?.message || err);
-                        await client.set(`${id}:status`, "Failed");
-                        continue;
-                    }
-                } else if (validProject.framework === "Next.js") {
-                    try {
+                    } else if (validProject.framework === "Next.js") {
                         console.log(`🟣 Next.js project detected, starting deployment...`);
                         await client.set(`${id}:status`, "Deploying");
                         const result = await deployNextProject(id, projectPath, validProject);
                         console.log(`✅ Next.js deployment completed. Port: ${result.port}`);
                         await client.set(`${id}:Port`, result.port);
-                    } catch (err: any) {
-                        console.error(`❌ Error deploying Next.js project for id ${id}:`, err?.message || err);
-                        await client.set(`${id}:status`, "Failed");
-                        continue;
+                    } else {
+                        throw new Error(`Unsupported framework: ${validProject.framework}`);
                     }
-                } else {
-                    console.error(`❌ Unsupported framework: ${validProject.framework} for id ${id}`);
-                    await client.set(`${id}:status`, "Failed");
-                    continue;
-                }
 
-                // Mark deployment as complete
-                await client.set(`${id}:status`, "Deployed");
-                console.log(`🎉 Deployment completed successfully for ID: ${id}`);
+                    // Mark deployment as complete
+                    await client.set(`${id}:status`, "Deployed");
+                    console.log(`🎉 Deployment completed successfully for ID: ${id}`);
+
+                } catch (err: any) {
+                    console.error(`❌ Deployment failed for ID ${id}:`, err?.message || err);
+                    await client.set(`${id}:status`, "Failed");
+
+                    // Cleanup files on failure
+                    if (fs.existsSync(baseDir)) {
+                        console.log(`🧹 Cleaning up failed deployment files at: ${baseDir}`);
+                        try {
+                            fs.rmSync(baseDir, { recursive: true, force: true });
+                            console.log(`✅ Cleanup successful`);
+                        } catch (cleanupErr: any) {
+                            console.error(`⚠️ Cleanup failed:`, cleanupErr?.message || cleanupErr);
+                        }
+                    }
+                }
 
                 console.log("--------------------------------------------------");
             } catch (err: any) {

@@ -232,3 +232,34 @@ export function execWithEnv(
 
     return execCommand(fullCommand);
 }
+
+/**
+ * Executes a command in a specific directory with environment variables
+ * @param directory - The directory to execute the command in
+ * @param envVars - Object containing environment variable key-value pairs
+ * @param command - The command to execute
+ * @param args - Optional arguments for the command
+ * @returns Promise resolving to command output
+ */
+export function execInDirectoryWithEnv(
+    directory: string,
+    envVars: Record<string, string>,
+    command: string,
+    args: string[] = []
+): Promise<CommandResult> {
+    const os = detectOS();
+    const cdCommand = buildCdCommand(directory);
+    const mainCommand = args.length > 0 ? `${command} ${args.join(" ")}` : command;
+
+    if (os === "windows") {
+        const envCommands = Object.entries(envVars).map(
+            ([key, value]) => `set ${key}=${value}`
+        );
+        return execCommand(chainCommands([cdCommand, ...envCommands, mainCommand]));
+    } else {
+        const envPrefix = Object.entries(envVars)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(" ");
+        return execCommand(chainCommands([cdCommand, `${envPrefix} ${mainCommand}`]));
+    }
+}
