@@ -20,7 +20,7 @@ export interface DeployedProject {
   env?: Record<string, string>;
 }
 
-export type DeployStatus = "Queued" | "Cloning" | "Building" | "Deploying" | "Deployed" | "Failed";
+export type DeployStatus = "Queued" | "Cloning" | "Dependencies Download" | "Building" | "Deploying" | "Deployed" | "Failed";
 
 export async function getMe(): Promise<GitHubUser | null> {
   try {
@@ -84,4 +84,24 @@ export async function getDeployStatus(
 
   const data: { status: DeployStatus } = await res.json();
   return data.status;
+}
+
+export interface LogEntry {
+  stage: string;
+  log: string;
+  timestamp: string;
+}
+
+export async function getDeploymentLogs(projectId: string): Promise<LogEntry[]> {
+  const res = await fetch(`${API_URL}/upload/deploy/logs/${projectId}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch deployment logs");
+  }
+
+  const data: { logs: LogEntry[] } = await res.json();
+  return data.logs;
 }

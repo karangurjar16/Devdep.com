@@ -1,84 +1,54 @@
 # Command Runner Utility
 
-This utility provides OS-agnostic command execution for the deployment system. It automatically detects the operating system and wraps commands appropriately.
+This utility provides OS-agnostic command execution for the deployment system using `spawn`. It automatically detects the operating system and streams output in real-time.
 
 ## Features
 
 - **OS Detection**: Automatically detects Windows, Linux, and macOS
-- **Dynamic Command Execution**: Runs commands with proper OS-specific wrappers
-- **Directory Execution**: Execute commands in specific directories
+- **Real-time Streaming**: Streams stdout and stderr line-by-line
+- **Directory Execution**: Execute commands directly in specific directories without chaining commands
 - **Environment Variables**: Set environment variables before running commands
-- **Command Chaining**: Chain multiple commands together
 
 ## Usage Examples
 
 ### Basic Command Execution
 
 ```typescript
-import { execCommand } from "./config/commandRunner";
+import { spawnCommand } from "./config/commandRunner";
 
 // Simple command with arguments
-await execCommand("pm2", ["ping"]);
+await spawnCommand("pm2", ["ping"]);
 
 // Command with multiple arguments
-await execCommand("pm2", ["start", "index.js", "--name", "myapp"]);
+await spawnCommand("pm2", ["start", "index.js", "--name", "myapp"]);
 
 // Command without arguments
-await execCommand("npm", ["install"]);
+await spawnCommand("npm", ["install"]);
 ```
 
 ### Execute in Specific Directory
 
 ```typescript
-import { execInDirectory } from "./config/commandRunner";
+import { spawnInDirectory } from "./config/commandRunner";
 
 // Run npm install in a specific directory
-await execInDirectory("C:\\projects\\myapp", "npm", ["install"]);
+await spawnInDirectory("C:\\projects\\myapp", "npm", ["install"]);
 
 // Start a server in a specific directory
-await execInDirectory("/var/www/myapp", "npm", ["start"]);
+await spawnInDirectory("/var/www/myapp", "npm", ["start"]);
 ```
 
 ### Execute with Environment Variables
 
 ```typescript
-import { execWithEnv } from "./config/commandRunner";
+import { spawnInDirectoryWithEnv } from "./config/commandRunner";
 
-// Set PORT and NODE_ENV before running
-await execWithEnv(
+// Set PORT and NODE_ENV before running PM2
+await spawnInDirectoryWithEnv(
+  "/var/www/myapp",
   { PORT: "3000", NODE_ENV: "production" },
-  "npm",
-  ["start"]
-);
-```
-
-### Chain Multiple Commands
-
-```typescript
-import { chainCommands, execCommand } from "./config/commandRunner";
-
-// Chain multiple commands together
-const chained = chainCommands([
-  "cd /path/to/project",
-  "npm install",
-  "npm run build"
-]);
-
-await execCommand(chained);
-```
-
-### Advanced: PM2 with Directory and Environment
-
-```typescript
-import { execInDirectory, chainCommands } from "./config/commandRunner";
-
-// Start PM2 in a specific directory with PORT set
-await execInDirectory(
-  projectPath,
-  chainCommands([
-    `set PORT=${port}`,
-    `pm2 start index.js --name ${name}`
-  ])
+  "pm2",
+  ["start", "index.js", "--name", "myapp"]
 );
 ```
 
@@ -87,46 +57,34 @@ await execInDirectory(
 ### `detectOS(): OSType`
 Returns the current operating system type: `"windows"`, `"linux"`, `"darwin"`, or `"unknown"`.
 
-### `execCommand(command: string, args?: string[]): Promise<CommandResult>`
-Executes a command with optional arguments. Automatically wraps the command for the current OS.
+### `spawnCommand(command: string, args?: string[], onData?: (data: string) => void): Promise<CommandResult>`
+Executes a command with optional arguments and real-time streaming using `spawn`.
 
 **Parameters:**
 - `command`: The command to execute (e.g., "pm2", "npm", "git")
 - `args`: Optional array of arguments
+- `onData`: Optional callback for streaming log outputs
 
 **Returns:** Promise resolving to `{ stdout: string, stderr: string }`
 
-### `execInDirectory(directory: string, command: string, args?: string[]): Promise<CommandResult>`
-Executes a command in a specific directory.
+### `spawnInDirectory(directory: string, command: string, args?: string[], onData?: (data: string) => void): Promise<CommandResult>`
+Executes a command in a specific directory using `spawn`.
 
 **Parameters:**
 - `directory`: The directory path to execute in
 - `command`: The command to execute
 - `args`: Optional array of arguments
+- `onData`: Optional callback for streaming log outputs
 
-### `execWithEnv(envVars: Record<string, string>, command: string, args?: string[]): Promise<CommandResult>`
-Executes a command with environment variables set.
+### `spawnInDirectoryWithEnv(directory: string, envVars: Record<string, string>, command: string, args?: string[], onData?: (data: string) => void): Promise<CommandResult>`
+Executes a command with environment variables set in a specific directory using `spawn`.
 
 **Parameters:**
+- `directory`: The directory path to execute in
 - `envVars`: Object containing environment variable key-value pairs
 - `command`: The command to execute
 - `args`: Optional array of arguments
-
-### `chainCommands(commands: string[]): string`
-Chains multiple commands together with the appropriate OS separator.
-
-**Parameters:**
-- `commands`: Array of commands to chain
-
-**Returns:** A single string with all commands chained
-
-### `buildCdCommand(directory: string): string`
-Builds an OS-specific change directory command.
-
-**Parameters:**
-- `directory`: The directory path
-
-**Returns:** The OS-specific cd command
+- `onData`: Optional callback for streaming log outputs
 
 ## Error Handling
 
@@ -138,7 +96,7 @@ Example error handling:
 
 ```typescript
 try {
-  const result = await execCommand("pm2", ["ping"]);
+  const result = await spawnCommand("pm2", ["ping"]);
   console.log("Success:", result.stdout);
 } catch (error: any) {
   console.error("Error:", error.error);
@@ -149,13 +107,7 @@ try {
 ## OS-Specific Behavior
 
 ### Windows
-- Commands are wrapped with `cmd /c "command"`
-- Directory changes use `cd /d "path"`
-- Environment variables use `set VAR=value`
-- Commands are chained with `&&`
+- Commands are spawned with `shell: true` enabled automatically
 
 ### Linux/macOS
-- Commands are executed directly
-- Directory changes use `cd "path"`
-- Environment variables use `VAR=value`
-- Commands are chained with `&&`
+- Commands are executed directly with `shell: false` for better security and stability

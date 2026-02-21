@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { copyFinalDist, downloadS3Folder } from './config/aws';
 import { client } from './config/redis'
-import { buildProject } from './utils';
+import { buildProject, publishLog } from './utils';
 import { pool } from './config/db';
 import { deployNodeProject } from './deployNode';
 import { DeployProject } from './types';
@@ -73,8 +73,15 @@ async function main() {
                     console.log(`🔗 Repository URL: ${validProject.repoUrl}`);
 
                     await client.set(`${id}:status`, "Cloning");
-                    await simpleGit().clone(validProject.repoUrl, baseDir);
+                    await publishLog(id, "Cloning", `Cloning repository ${validProject.repoUrl}...`);
+
+                    const git = simpleGit();
+
+                    await git.clone(validProject.repoUrl, baseDir);
                     console.log(`✅ Repository cloned successfully to: ${baseDir}`);
+                    await publishLog(id, "Cloning", `Repository cloned successfully.`);
+
+                    await client.set(`${id}:status`, "Dependencies Download");
 
                     // Calculate project path based on rootDir
                     if (validProject.rootDir && validProject.rootDir.trim().length > 0) {
@@ -93,27 +100,28 @@ async function main() {
                     // Process based on framework
                     if (validProject.framework === "React") {
                         console.log(`⚛️ React project detected, starting build process...`);
-                        await client.set(`${id}:status`, "Building");
-                        await buildProject(projectPath);
+                        await buildProject(id, projectPath);
                         console.log("✅ Build completed successfully");
 
                         await client.set(`${id}:status`, "Deploying");
                         console.log(`📤 Uploading final distribution for ID: ${id}...`);
+                        await publishLog(id, "Deploying", "Uploading final distribution to S3...");
                         await copyFinalDist(id, projectPath);
                         console.log(`✅ Distribution uploaded successfully for ID: ${id}`);
+                        await publishLog(id, "Deploying", "Distribution uploaded successfully");
 
                         console.log(`🧹 Cleaning up React build files for ID: ${id}`);
+                        await publishLog(id, "Deploying", "Cleaning up React build files...");
                         fs.rmSync(baseDir, { recursive: true, force: true });
+                        await publishLog(id, "Deploying", "Cleanup completed");
 
                     } else if (validProject.framework === "Node") {
                         console.log(`🟢 Node.js project detected, starting deployment...`);
-                        await client.set(`${id}:status`, "Deploying");
                         const result = await deployNodeProject(id, projectPath, validProject);
                         console.log(`✅ Node.js deployment completed. Port: ${result.port}`);
                         await client.set(`${id}:Port`, result.port);
                     } else if (validProject.framework === "Next.js") {
                         console.log(`🟣 Next.js project detected, starting deployment...`);
-                        await client.set(`${id}:status`, "Deploying");
                         const result = await deployNextProject(id, projectPath, validProject);
                         console.log(`✅ Next.js deployment completed. Port: ${result.port}`);
                         await client.set(`${id}:Port`, result.port);
@@ -124,10 +132,12 @@ async function main() {
                     // Mark deployment as complete
                     await client.set(`${id}:status`, "Deployed");
                     console.log(`🎉 Deployment completed successfully for ID: ${id}`);
+                    await publishLog(id, "Deploying", "Deployment completed successfully! 🎉");
 
                 } catch (err: any) {
                     console.error(`❌ Deployment failed for ID ${id}:`, err?.message || err);
                     await client.set(`${id}:status`, "Failed");
+                    await publishLog(id, Object.keys(err).length > 0 ? "Deploying" : "Failed", `Deployment failed: ${err?.message || err}`);
 
                     // Cleanup files on failure
                     if (fs.existsSync(baseDir)) {

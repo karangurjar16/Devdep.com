@@ -1,8 +1,24 @@
 import path from "path";
 import fs from "fs";
-import { execInDirectory, execInDirectoryWithEnv } from "./config/commandRunner";
+import { spawnInDirectory, spawnInDirectoryWithEnv } from "./config/commandRunner";
+import { client } from "./config/redis";
 
-export async function buildProject(projectPath: string): Promise<string> {
+export async function publishLog(id: string, stage: string, log: string) {
+    try {
+        const logEntry = JSON.stringify({
+            stage,
+            log,
+            timestamp: new Date().toISOString()
+        });
+        await client.rPush(`${id}:logs`, logEntry);
+        // Optional: set expiry to clean up old logs, e.g., after 24 hours
+        // await client.expire(`${id}:logs`, 86400);
+    } catch (err: any) {
+        console.error(`❌ Error publishing log for ${id}:`, err?.message || err);
+    }
+}
+
+export async function buildProject(id: string, projectPath: string): Promise<string> {
     try {
         // Validation: Check if projectPath is valid
         if (!projectPath || typeof projectPath !== 'string' || projectPath.trim().length === 0) {
@@ -24,21 +40,30 @@ export async function buildProject(projectPath: string): Promise<string> {
 
         // ── Step 1: Install dependencies ────────────────────────────────────
         console.log("📦 Installing dependencies...");
-        const installResult = await execInDirectory(projectPath, "npm install");
+        await publishLog(id, "Dependencies Download", "Installing dependencies...");
+        const installResult = await spawnInDirectory(projectPath, "npm", ["install"], (logLine) => {
+            publishLog(id, "Dependencies Download", logLine);
+        });
         if (installResult.stderr) {
             console.warn(`⚠️ Install warnings: ${installResult.stderr}`);
         }
         console.log("✅ Dependencies installed");
+        await publishLog(id, "Dependencies Download", "Dependencies installed successfully");
 
+        await client.set(`${id}:status`, "Building");
         // ── Step 2: Build with increased heap memory ─────────────────────────
         // Vite/webpack builds can exceed the default 512 MB Node.js heap on
         // low-memory servers — bump it to 1536 MB to prevent OOM crashes.
         console.log("🔨 Building project (NODE_OPTIONS=--max-old-space-size=1536)...");
-        const buildResult = await execInDirectoryWithEnv(
+        await publishLog(id, "Building", "Starting project build...");
+        const buildResult = await spawnInDirectoryWithEnv(
             projectPath,
             { NODE_OPTIONS: "--max-old-space-size=1536" },
             "npm",
-            ["run", "build"]
+            ["run", "build"],
+            (logLine) => {
+                publishLog(id, "Building", logLine);
+            }
         );
 
         console.log("✅ Build completed successfully");

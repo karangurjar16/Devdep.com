@@ -28,6 +28,7 @@ import {
     RefreshCw,
 } from "lucide-react";
 import AddDomainDialog from "@/components/AddDomainDialog";
+import DeploymentLogs from "@/components/DeploymentLogs";
 
 export default function ProjectDetails() {
     const { projectId } = useParams<{ projectId: string }>();
@@ -397,6 +398,9 @@ export default function ProjectDetails() {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Deployment Logs */}
+                <DeploymentLogs projectId={project.id} currentStatus={status} />
 
                 {/* Environment Variables Card */}
                 <Card className="glass-strong border-white/10">

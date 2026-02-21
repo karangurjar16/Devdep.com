@@ -68,6 +68,33 @@ router.get("/deploy/status/:id", async (req, res) => {
     res.json({ status });
 });
 
+router.get("/deploy/logs/:id", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const logs = await client.lRange(`${id}:logs`, 0, -1);
+
+        if (!logs || logs.length === 0) {
+            return res.json({ logs: [] });
+        }
+
+        // Parse JSON strings back to objects
+        const parsedLogs = logs.map(logStr => {
+            try {
+                return JSON.parse(logStr);
+            } catch (e) {
+                // Fallback for any improperly formatted logs
+                return { stage: "Unknown", log: logStr, timestamp: new Date().toISOString() };
+            }
+        });
+
+        res.json({ logs: parsedLogs });
+    } catch (error: any) {
+        console.error(`[logs:${id}] Error fetching logs:`, error?.message || error);
+        res.status(500).json({ error: "Failed to fetch logs", details: error?.message });
+    }
+});
+
 router.delete("/deploy/:id", async (req, res) => {
     const { id } = req.params;
 

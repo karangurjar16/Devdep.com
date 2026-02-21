@@ -1,11 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { execInDirectory } from "./config/commandRunner";
+import { spawnInDirectory } from "./config/commandRunner";
 import { getFreePort } from "./portManager";
 import { startWithPM2 } from "./pm2Runner";
 import { writeEnvFile } from "./writeEnvFile";
+import { client } from "./config/redis";
 import { DeployProject } from "./types";
 import { getEntryFile } from "./utils/parseStartScript";
+import { publishLog } from "./utils";
 
 export async function deployNextProject(id: string, projectPath: string, project: DeployProject) {
     try {
@@ -43,9 +45,14 @@ export async function deployNextProject(id: string, projectPath: string, project
         // Install dependencies
         try {
             console.log("📦 Dependencies downloading...");
-            await execInDirectory(projectPath, "npm", ["install"]);
+            await publishLog(id, "Dependencies Download", "Installing Next.js dependencies...");
+            await spawnInDirectory(projectPath, "npm", ["install"], (logLine) => {
+                publishLog(id, "Dependencies Download", logLine);
+            });
             console.log("✅ Dependencies installed successfully");
+            await publishLog(id, "Dependencies Download", "Dependencies installed successfully.");
         } catch (error: any) {
+            await publishLog(id, "Dependencies Download", `Error installing dependencies: ${error?.error || error?.message || 'Unknown error'}`);
             throw new Error(`Failed to install dependencies: ${error?.error || error?.message || 'Unknown error'}`);
         }
 
@@ -76,10 +83,16 @@ export async function deployNextProject(id: string, projectPath: string, project
             throw new Error("Next.js project must have both build and start scripts");
         }
         try {
+            await client.set(`${id}:status`, "Building");
             console.log("🔨 Building started...");
-            await execInDirectory(projectPath, "npm", ["run", "build"]);
+            await publishLog(id, "Building", "Building Next.js project...");
+            await spawnInDirectory(projectPath, "npm", ["run", "build"], (logLine) => {
+                publishLog(id, "Building", logLine);
+            });
             console.log("✅ Building ended successfully");
+            await publishLog(id, "Building", "Build completed successfully.");
         } catch (error: any) {
+            await publishLog(id, "Building", `Build failed: ${error?.error || error?.message || 'Unknown error'}`);
             throw new Error(`Build failed: ${error?.error || error?.message || 'Unknown error'}`);
         }
 
@@ -90,14 +103,18 @@ export async function deployNextProject(id: string, projectPath: string, project
         console.log(`✅ Entry file detected: ${entryFile}`);
 
         // Start with PM2
+        await client.set(`${id}:status`, "Deploying");
         console.log("🚀 Starting application with PM2...");
+        await publishLog(id, "Deploying", `Starting Next.js application with PM2 on port ${port}...`);
         const result = await startWithPM2(id, projectPath, port, "NEXT", pkg, entryFile);
 
         if (result.status === "failed") {
+            await publishLog(id, "Deploying", `PM2 startup failed: ${result.error || 'Unknown error'}`);
             throw new Error(`PM2 startup failed: ${result.error || 'Unknown error'}`);
         }
 
         console.log(`✅ Application started successfully with PM2`);
+        await publishLog(id, "Deploying", "Next.js application started successfully securely with PM2.");
 
         return {
             port,

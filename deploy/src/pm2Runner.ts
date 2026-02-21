@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { execCommand, execInDirectory, execWithEnv, chainCommands, buildCdCommand } from "./config/commandRunner";
+import { spawnCommand, spawnInDirectory, spawnInDirectoryWithEnv } from "./config/commandRunner";
 
 export type ProjectType = "NODE" | "NEXT";
 
@@ -42,12 +42,12 @@ export async function startWithPM2(
 
     // 1. Ensure PM2 daemon is running
     try {
-      await execCommand("pm2", ["ping"]);
+      await spawnCommand("pm2", ["ping"]);
       console.log(`✅ PM2 daemon is running`);
     } catch (pingError) {
       console.log(`⚠️ PM2 daemon not responding, attempting to resurrect...`);
       try {
-        await execCommand("pm2", ["resurrect"]);
+        await spawnCommand("pm2", ["resurrect"]);
         console.log(`✅ PM2 daemon resurrected`);
       } catch (resurrectError: any) {
         console.warn(`⚠️ Could not resurrect PM2 daemon: ${resurrectError?.error || 'Unknown error'}`);
@@ -57,7 +57,7 @@ export async function startWithPM2(
     // 2. Delete existing process with same name (if any)
     console.log(`🗑️ Cleaning up existing process with name: ${name}...`);
     try {
-      await execCommand("pm2", ["delete", name]);
+      await spawnCommand("pm2", ["delete", name]);
       console.log(`✅ Existing process deleted`);
     } catch (deleteError) {
       // Ignore error if process doesn't exist
@@ -76,11 +76,10 @@ export async function startWithPM2(
       const standaloneServer = path.join(projectPath, '.next', 'standalone', 'server.js');
       if (fs.existsSync(standaloneServer)) {
         console.log(`ℹ️ Using Next.js standalone server: ${standaloneServer}`);
-        result = await execCommand(
-          chainCommands([
-            buildCdCommand(projectPath),
-            `pm2 start ${standaloneServer} --name ${name} --env production`
-          ])
+        result = await spawnInDirectory(
+          projectPath,
+          "pm2",
+          ["start", standaloneServer, "--name", name, "--env", "production"]
         );
       } else {
         // Fallback: run the next binary directly from node_modules
@@ -98,32 +97,22 @@ export async function startWithPM2(
 
         console.log(`ℹ️ Resolved Next.js executable: ${nextExecutable}`);
 
-        // Set environment variables before running PM2
-        const isWindows = process.platform === 'win32';
-        // Chain commands: cd -> set env -> pm2 start
-        // Note: chainCommands handles the '&&' joining.
-        // We set NODE_ENV=production.
-        const setEnv = isWindows ? `set NODE_ENV=production` : `export NODE_ENV=production`;
-
-        result = await execCommand(
-          chainCommands([
-            buildCdCommand(projectPath),
-            setEnv,
-            `pm2 start "${nextExecutable}" --name ${name} -- start -p ${port}`
-          ])
+        result = await spawnInDirectoryWithEnv(
+          projectPath,
+          { NODE_ENV: "production" },
+          "pm2",
+          ["start", nextExecutable, "--name", name, "--", "start", "-p", port.toString()]
         );
       }
     } else {
       // Standard Node.js project - start with the detected entry file
       console.log(`ℹ️ Using entry file: ${entryFile}`);
 
-      result = await execInDirectory(
+      result = await spawnInDirectoryWithEnv(
         projectPath,
-        chainCommands([
-          `set PORT=${port}`,
-          `set NODE_ENV=production`,
-          `pm2 start ${entryFile} --name ${name}`
-        ])
+        { PORT: port.toString(), NODE_ENV: "production" },
+        "pm2",
+        ["start", entryFile, "--name", name]
       );
     }
 
@@ -166,7 +155,7 @@ export async function stopPM2Process(id: string): Promise<{ status: string; proc
 
     // Delete the PM2 process
     try {
-      const result = await execCommand("pm2", ["delete", id]);
+      const result = await spawnCommand("pm2", ["delete", id]);
       console.log(`✅ PM2 process ${id} stopped and removed successfully`);
       console.log(`📊 PM2 Output: ${result.stdout}`);
 
