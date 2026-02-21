@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { spawnCommand, spawnInDirectory, spawnInDirectoryWithEnv } from "./config/commandRunner";
+import { spawnCommand, spawnInDirectory, spawnInDirectoryWithEnv, execCommand, chainCommands, buildCdCommand } from "./config/commandRunner";
 
 export type ProjectType = "NODE" | "NEXT";
 
@@ -76,10 +76,11 @@ export async function startWithPM2(
       const standaloneServer = path.join(projectPath, '.next', 'standalone', 'server.js');
       if (fs.existsSync(standaloneServer)) {
         console.log(`ℹ️ Using Next.js standalone server: ${standaloneServer}`);
-        result = await spawnInDirectory(
-          projectPath,
-          "pm2",
-          ["start", standaloneServer, "--name", name, "--env", "production"]
+        result = await execCommand(
+          chainCommands([
+            buildCdCommand(projectPath),
+            `pm2 start ${standaloneServer} --name ${name} --env production`
+          ])
         );
       } else {
         // Fallback: run the next binary directly from node_modules
@@ -97,11 +98,19 @@ export async function startWithPM2(
 
         console.log(`ℹ️ Resolved Next.js executable: ${nextExecutable}`);
 
-        result = await spawnInDirectoryWithEnv(
-          projectPath,
-          { NODE_ENV: "production" },
-          "pm2",
-          ["start", nextExecutable, "--name", name, "--", "start", "-p", port.toString()]
+        // Set environment variables before running PM2
+        const isWindows = process.platform === 'win32';
+        // Chain commands: cd -> set env -> pm2 start
+        // Note: chainCommands handles the '&&' joining.
+        // We set NODE_ENV=production.
+        const setEnv = isWindows ? `set NODE_ENV=production` : `export NODE_ENV=production`;
+
+        result = await execCommand(
+          chainCommands([
+            buildCdCommand(projectPath),
+            setEnv,
+            `pm2 start "${nextExecutable}" --name ${name} -- start -p ${port}`
+          ])
         );
       }
     } else {

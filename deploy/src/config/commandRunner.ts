@@ -23,6 +23,40 @@ export interface CommandError {
     stderr: string;
 }
 
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
+
+export async function execCommand(command: string): Promise<CommandResult> {
+    try {
+        console.log(`\n🔧 [EXEC] Executing: ${command}`);
+        const { stdout, stderr } = await exec(command);
+        console.log(`✅ [EXEC SUCCESS]`);
+        return { stdout, stderr };
+    } catch (err: any) {
+        console.error(`❌ [EXEC ERROR] ${err?.message || "Unknown error"}`);
+        throw {
+            error: err.message,
+            stdout: err.stdout || "",
+            stderr: err.stderr || ""
+        } as CommandError;
+    }
+}
+
+export function chainCommands(commands: string[]): string {
+    const os = detectOS();
+    const separator = os === "windows" ? " && " : " && ";
+    return commands.filter(cmd => cmd.trim() !== "").join(separator);
+}
+
+export function buildCdCommand(directory: string): string {
+    const os = detectOS();
+    if (os === "windows") {
+        // On Windows, cd to a different drive requires the /d flag
+        return `cd /d "${directory}"`;
+    }
+    return `cd "${directory}"`;
+}
+
 /**
  * Detects the current operating system
  * @returns The detected OS type
@@ -81,12 +115,17 @@ export function spawnCommand(
 
             let stdoutOutput = "";
             let stderrOutput = "";
+            let stdoutBuffer = "";
+            let stderrBuffer = "";
 
             child.stdout.on("data", (data) => {
                 const text = data.toString();
                 stdoutOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(line));
+                    stdoutBuffer += text;
+                    const lines = stdoutBuffer.split('\n');
+                    stdoutBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(line));
                 }
             });
 
@@ -94,7 +133,10 @@ export function spawnCommand(
                 const text = data.toString();
                 stderrOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
+                    stderrBuffer += text;
+                    const lines = stderrBuffer.split('\n');
+                    stderrBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
                 }
             });
 
@@ -108,6 +150,10 @@ export function spawnCommand(
             });
 
             child.on("close", (code) => {
+                if (onData) {
+                    if (stdoutBuffer.trim()) onData(stdoutBuffer);
+                    if (stderrBuffer.trim()) onData(`[stderr] ${stderrBuffer}`);
+                }
                 if (code === 0) {
                     console.log(`✅ [SPAWN SUCCESS]`);
                     resolve({
@@ -166,12 +212,17 @@ export function spawnInDirectory(
 
             let stdoutOutput = "";
             let stderrOutput = "";
+            let stdoutBuffer = "";
+            let stderrBuffer = "";
 
             child.stdout.on("data", (data) => {
                 const text = data.toString();
                 stdoutOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(line));
+                    stdoutBuffer += text;
+                    const lines = stdoutBuffer.split('\n');
+                    stdoutBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(line));
                 }
             });
 
@@ -179,7 +230,10 @@ export function spawnInDirectory(
                 const text = data.toString();
                 stderrOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
+                    stderrBuffer += text;
+                    const lines = stderrBuffer.split('\n');
+                    stderrBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
                 }
             });
 
@@ -193,6 +247,10 @@ export function spawnInDirectory(
             });
 
             child.on("close", (code) => {
+                if (onData) {
+                    if (stdoutBuffer.trim()) onData(stdoutBuffer);
+                    if (stderrBuffer.trim()) onData(`[stderr] ${stderrBuffer}`);
+                }
                 if (code === 0) {
                     console.log(`✅ [SPAWN SUCCESS]`);
                     resolve({
@@ -253,12 +311,17 @@ export function spawnInDirectoryWithEnv(
 
             let stdoutOutput = "";
             let stderrOutput = "";
+            let stdoutBuffer = "";
+            let stderrBuffer = "";
 
             child.stdout.on("data", (data) => {
                 const text = data.toString();
                 stdoutOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(line));
+                    stdoutBuffer += text;
+                    const lines = stdoutBuffer.split('\n');
+                    stdoutBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(line));
                 }
             });
 
@@ -266,7 +329,10 @@ export function spawnInDirectoryWithEnv(
                 const text = data.toString();
                 stderrOutput += text;
                 if (onData) {
-                    text.split('\n').filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
+                    stderrBuffer += text;
+                    const lines = stderrBuffer.split('\n');
+                    stderrBuffer = lines.pop() || "";
+                    lines.filter((line: string) => line.trim()).forEach((line: string) => onData(`[stderr] ${line}`));
                 }
             });
 
@@ -280,6 +346,10 @@ export function spawnInDirectoryWithEnv(
             });
 
             child.on("close", (code) => {
+                if (onData) {
+                    if (stdoutBuffer.trim()) onData(stdoutBuffer);
+                    if (stderrBuffer.trim()) onData(`[stderr] ${stderrBuffer}`);
+                }
                 if (code === 0) {
                     console.log(`✅ [SPAWN SUCCESS]`);
                     resolve({

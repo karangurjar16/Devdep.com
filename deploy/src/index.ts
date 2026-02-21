@@ -75,9 +75,15 @@ async function main() {
                     await client.set(`${id}:status`, "Cloning");
                     await publishLog(id, "Cloning", `Cloning repository ${validProject.repoUrl}...`);
 
+                    // Ensure baseDir is completely empty before cloning to avoid simple-git crash
+                    if (fs.existsSync(baseDir)) {
+                        console.log(`🧹 Cleaning up existing directory before cloning: ${baseDir}`);
+                        fs.rmSync(baseDir, { recursive: true, force: true });
+                    }
+
                     const git = simpleGit();
 
-                    await git.clone(validProject.repoUrl, baseDir);
+                    await git.clone(validProject.repoUrl, baseDir, ['--depth', '1', '--single-branch']);
                     console.log(`✅ Repository cloned successfully to: ${baseDir}`);
                     await publishLog(id, "Cloning", `Repository cloned successfully.`);
 
