@@ -90,7 +90,19 @@ router.get("/deploy", async (req: Request, res: Response) => {
       },
     });
 
-    res.json(deploys);
+    const maskedDeploys = deploys.map(deploy => {
+      const env = deploy.env as Record<string, string> | null;
+      if (!env) return deploy;
+
+      const maskedEnv: Record<string, string> = {};
+      for (const key in env) {
+        maskedEnv[key] = "*****";
+      }
+
+      return { ...deploy, env: maskedEnv };
+    });
+
+    res.json(maskedDeploys);
   } catch {
     res.status(500).json({ message: "Failed to fetch deploys" });
   }
