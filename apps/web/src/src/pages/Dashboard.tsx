@@ -1,0 +1,436 @@
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import {
+  getDeployedProjects,
+  getDeployStatus,
+  logout,
+  type DeployedProject,
+  type DeployStatus,
+} from "@/api/github";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  ExternalLink,
+  Github,
+  Calendar,
+  Folder,
+  Globe,
+  Trash2,
+  LogOut,
+} from "lucide-react";
+import DropdownMenu, { type MenuOption } from "@/components/DropdownMenu";
+import AddDomainDialog from "@/components/AddDomainDialog";
+import DeleteProjectDialog from "@/components/DeleteProjectDialog";
+import { reserveDomain, getDomainsByProjectId } from "@/api/domain";
+import { deleteProject } from "@/api/deploy";
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<DeployedProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      // Always redirect to login, even if the request failed
+      navigate("/", { replace: true });
+    }
+  };
+  const [statuses, setStatuses] = useState<Record<string, DeployStatus | "Unknown">>({});
+  const [isAddDomainDialogOpen, setIsAddDomainDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<DeployedProject | null>(null);
+  const [projectDomains, setProjectDomains] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    getDeployedProjects()
+      .then((data) => {
+        const sorted = [...data].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setProjects(sorted);
+      })
+      .catch(() => setError("Unable to load deployed projects"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    let isCancelled = false;
+    let intervalId: number | undefined;
+
+    const fetchStatuses = async () => {
+      try {
+        const entries = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const status = await getDeployStatus(project.id);
+              return [project.id, status] as const;
+            } catch {
+              return [project.id, "Unknown" as const];
+            }
+          }),
+        );
+
+        if (!isCancelled) {
+          setStatuses((prev) => ({
+            ...prev,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      } catch {
+        // ignore top-level errors for polling
+      }
+    };
+
+    // initial fetch
+    fetchStatuses();
+    // poll every 5 seconds
+    intervalId = window.setInterval(fetchStatuses, 5000);
+
+    return () => {
+      isCancelled = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [projects]);
+
+  // Fetch domains for all projects
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    const fetchDomains = async () => {
+      try {
+        const domainEntries = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const domains = await getDomainsByProjectId(project.id);
+              return [project.id, domains] as const;
+            } catch {
+              return [project.id, []] as const;
+            }
+          }),
+        );
+
+        setProjectDomains((prev) => ({
+          ...prev,
+          ...Object.fromEntries(domainEntries),
+        }));
+      } catch (error) {
+        console.error("Error fetching domains:", error);
+      }
+    };
+
+    fetchDomains();
+  }, [projects]);
+
+  const getStatusVariant = (status?: DeployStatus | "Unknown") => {
+    if (!status) return "outline" as const;
+    switch (status) {
+      case "Failed": return "destructive" as const;
+      case "Deployed": return "default" as const;
+      case "Queued":
+      case "Cloning":
+      case "Building":
+      case "Deploying": return "secondary" as const;
+      default: return "outline" as const;
+    }
+  };
+
+  const getStatusClassName = (status?: DeployStatus | "Unknown") => {
+    if (status === "Deployed") return "bg-green-500 text-white border-transparent hover:bg-green-600";
+    if (status === "Failed") return "bg-red-500/80 text-white border-transparent";
+    if (status === "Queued" || status === "Cloning" || status === "Building" || status === "Deploying")
+      return "bg-amber-500/80 text-white border-transparent";
+    return "";
+  };
+
+  const formatStatusText = (status?: DeployStatus | "Unknown") => {
+    if (!status) return "Loading...";
+    return status;
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return `${months[date.getMonth()]} ${date.getDate()}`;
+  };
+
+  const extractRepoOwnerAndName = (repoUrl: string) => {
+    const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (match) {
+      return { owner: match[1], name: match[2] };
+    }
+    return { owner: "", name: "" };
+  };
+
+  // Define menu options - easily extensible
+  const getMenuOptions = (): MenuOption<DeployedProject>[] => [
+    {
+      label: "Add Domain",
+      icon: <Globe className="h-4 w-4" />,
+      onClick: (project) => {
+        setSelectedProject(project);
+        setIsAddDomainDialogOpen(true);
+      },
+    },
+    {
+      label: "Delete Project",
+      icon: <Trash2 className="h-4 w-4" />,
+      onClick: (project) => {
+        setSelectedProject(project);
+        setIsDeleteDialogOpen(true);
+      },
+    },
+  ];
+
+  const handleAddDomain = async (domain: string, project: DeployedProject) => {
+    try {
+      const result = await reserveDomain(project.id, domain);
+      if (result.success) {
+        console.log("Domain added successfully:", domain);
+        // Refresh domains for this project
+        try {
+          const domains = await getDomainsByProjectId(project.id);
+          setProjectDomains((prev) => ({
+            ...prev,
+            [project.id]: domains,
+          }));
+        } catch (error) {
+          console.error("Error refreshing domains:", error);
+        }
+      } else {
+        throw new Error(result.error || "Failed to reserve domain");
+      }
+    } catch (error) {
+      console.error("Error adding domain:", error);
+      throw error; // Re-throw to let the dialog handle the error
+    }
+  };
+
+  const handleDeleteProject = async (project: DeployedProject) => {
+    try {
+      await deleteProject(project.id);
+      // Remove project from local state
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      console.log("Project deleted successfully:", project.id);
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      throw error; // Re-throw to let the dialog handle the error
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p className="text-muted-foreground">Loading projects...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-subtle">
+      {/* Header */}
+      <div className="glass-strong border-b border-white/10 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Projects</h1>
+              <p className="text-sm text-muted-foreground mt-1">Manage your deployed applications</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => navigate("/my-projects")}
+                className="btn-glossy"
+              >
+                Import New Project
+              </Button>
+              <Button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 hover:text-white gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                {loggingOut ? "Logging out..." : "Logout"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {projects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="glass-strong rounded-2xl p-12 text-center max-w-md">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-primary/20 flex items-center justify-center">
+                <Folder className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
+              <p className="text-muted-foreground mb-6">
+                Start by importing a project from GitHub
+              </p>
+              <Button
+                onClick={() => navigate("/my-projects")}
+                className="btn-glossy"
+              >
+                Import Your First Project
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map((project) => {
+              const { owner, name } = extractRepoOwnerAndName(project.repoUrl);
+              const deploymentUrl = `${project.id}.devdep.dpdns.org`;
+
+              return (
+                <Card
+                  key={project.id}
+                  className="glass hover-lift border-white/10 flex flex-col cursor-pointer transition-all hover:border-primary/30"
+                  onClick={() => navigate(`/project/${project.id}`)}
+                >
+                  <CardHeader className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg font-semibold truncate">
+                          {project.projectName}
+                        </CardTitle>
+                        <a
+                          href={`https://${deploymentUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-primary transition-colors block mt-1 flex items-center gap-1"
+                        >
+                          <Globe className="h-3 w-3" />
+                          {deploymentUrl}
+                        </a>
+                        {/* Custom Domains */}
+                        {projectDomains[project.id] && projectDomains[project.id].length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {projectDomains[project.id].map((domain) => {
+                              const fullDomain = `${domain}.devdep.dpdns.org`;
+                              return (
+                                <a
+                                  key={domain}
+                                  href={`https://${fullDomain}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 group"
+                                >
+                                  <Globe className="h-3.5 w-3.5 text-primary/70" />
+                                  <span>{fullDomain}</span>
+                                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className="flex items-center gap-2 ml-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenu
+                          id={project.id}
+                          options={getMenuOptions()}
+                          data={project}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <Github className="h-4 w-4 text-muted-foreground" />
+                      <a
+                        href={project.repoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                      >
+                        {owner}/{name}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-3 flex-1">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formatDate(project.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Folder className="h-4 w-4" />
+                        <span>main</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <Badge variant="secondary">{project.framework}</Badge>
+                      {project.rootDir !== "./" && (
+                        <Badge variant="outline">Root: {project.rootDir}</Badge>
+                      )}
+                      <Badge
+                        variant={getStatusVariant(statuses[project.id])}
+                        className={`${getStatusClassName(statuses[project.id])} truncate max-w-full`}
+                      >
+                        {formatStatusText(statuses[project.id])}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        <AddDomainDialog
+          open={isAddDomainDialogOpen}
+          onOpenChange={setIsAddDomainDialogOpen}
+          project={selectedProject}
+          onAddDomain={handleAddDomain}
+        />
+        <DeleteProjectDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          project={selectedProject}
+          onDelete={handleDeleteProject}
+        />
+      </div>
+    </div>
+  );
+}

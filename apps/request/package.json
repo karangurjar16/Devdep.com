@@ -1,0 +1,33 @@
+{
+    "name": "@repo/request",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "bun --watch src/index.ts",
+        "build": "tsc -b",
+        "start": "node dist/index.js",
+        "lint": "eslint .",
+        "type-check": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@repo/shared": "workspace:*",
+        "aws-sdk": "^2.1693.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.2.1",
+        "http-proxy": "^1.18.1",
+        "lru-cache": "^11.2.4",
+        "mime-types": "^3.0.2",
+        "redis": "^5.10.0"
+    },
+    "devDependencies": {
+        "@repo/eslint-config": "workspace:*",
+        "@repo/tsconfig": "workspace:*",
+        "@types/express": "^5.0.6",
+        "@types/http-proxy": "^1.17.17",
+        "@types/mime-types": "^3.0.1",
+        "@types/node": "^22.0.0",
+        "eslint": "^9.39.1",
+        "typescript": "^5.9.3"
+    }
+}

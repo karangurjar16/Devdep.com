@@ -1,0 +1,41 @@
+{
+    "extends": "@repo/tsconfig/node.json",
+    "compilerOptions": {
+        "rootDir": "src",
+        "outDir": "dist",
+        "noEmit": false,
+        "skipLibCheck": true,
+        "paths": {
+            "@repo/shared": [
+                "../../packages/shared/src/index.ts"
+            ],
+            "@repo/redis": [
+                "../../packages/redis/src/index.ts"
+            ],
+            "@repo/aws": [
+                "../../packages/aws/src/index.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "prisma",
+        "src/generated",
+        "**/*.js"
+    ],
+    "references": [
+        {
+            "path": "../../packages/shared"
+        },
+        {
+            "path": "../../packages/redis"
+        },
+        {
+            "path": "../../packages/aws"
+        }
+    ]
+}
