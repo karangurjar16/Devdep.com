@@ -2,7 +2,6 @@
     "extends": "@repo/tsconfig/node.json",
     "compilerOptions": {
         "composite": true,
-        "emitDeclarationOnly": true,
         "declaration": true,
         "declarationMap": true,
         "rootDir": "src",
