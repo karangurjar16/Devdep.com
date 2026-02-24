@@ -1,24 +1,33 @@
-import { S3 } from "aws-sdk";
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import fs from "fs";
 import dotenv from "dotenv";
 import { exec } from "child_process";
 
 dotenv.config();
 
-const s3 = new S3({
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+const s3 = new S3Client({
+    region: "auto",
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+    },
     endpoint: process.env.R2_ENDPOINT
-})
+});
 
 
 export const uploadFile = async (fileName: string, localFilePath: string) => {
-    const fileContent = fs.readFileSync(localFilePath);
-    await s3.upload({
-        Body: fileContent,
-        Bucket: "devdep",
-        Key: fileName,
-    }).promise();
+    const fileContent = fs.createReadStream(localFilePath);
+    const parallelUploads3 = new Upload({
+        client: s3,
+        params: {
+            Bucket: "devdep",
+            Key: fileName,
+            Body: fileContent,
+        },
+    });
+
+    await parallelUploads3.done();
 }
 
 export async function deleteS3Folder(id: string): Promise<void> {
@@ -30,10 +39,12 @@ export async function deleteS3Folder(id: string): Promise<void> {
         const prefix = `dist/${id}/`;
         console.log(`🗑️ Deleting S3 objects with prefix: ${prefix}...`);
 
-        const listResponse = await s3.listObjectsV2({
+        const listCommand = new ListObjectsV2Command({
             Bucket: "devdep",
             Prefix: prefix
-        }).promise();
+        });
+
+        const listResponse = await s3.send(listCommand);
 
         if (!listResponse.Contents || listResponse.Contents.length === 0) {
             console.log(`ℹ️ No files found in S3 with prefix: ${prefix}`);
@@ -44,13 +55,15 @@ export async function deleteS3Folder(id: string): Promise<void> {
 
         const objectsToDelete = listResponse.Contents.map(({ Key }) => ({ Key: Key! }));
 
-        const deleteResponse = await s3.deleteObjects({
+        const deleteCommand = new DeleteObjectsCommand({
             Bucket: "devdep",
             Delete: {
                 Objects: objectsToDelete,
                 Quiet: false
             }
-        }).promise();
+        });
+
+        const deleteResponse = await s3.send(deleteCommand);
 
         console.log(`✅ Successfully deleted ${deleteResponse.Deleted?.length || 0} file(s) from S3`);
 

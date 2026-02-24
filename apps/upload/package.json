@@ -3,19 +3,22 @@
     "version": "1.0.0",
     "private": true,
     "scripts": {
-        "dev": "bun --watch src/index.ts",
-        "build": "prisma generate && tsc -b",
+        "dev": "tsc -b && node dist/index.js",
+        "build": "bunx --bun prisma generate && tsc -b",
         "start": "node dist/index.js",
         "lint": "eslint .",
         "type-check": "tsc --noEmit",
-        "db:generate": "prisma generate",
-        "db:migrate": "prisma migrate dev"
+        "db:generate": "bunx --bun prisma generate",
+        "db:migrate": "bunx --bun prisma migrate dev"
     },
     "dependencies": {
         "@repo/shared": "workspace:*",
+        "@repo/redis": "workspace:*",
+        "@repo/aws": "workspace:*",
         "@prisma/adapter-pg": "^7.1.0",
         "@prisma/client": "^6.19.1",
-        "aws-sdk": "^2.1693.0",
+        "@aws-sdk/client-s3": "^3.750.0",
+        "@aws-sdk/lib-storage": "^3.750.0",
         "axios": "^1.13.2",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",

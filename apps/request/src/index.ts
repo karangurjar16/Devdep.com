@@ -1,5 +1,5 @@
 import express from "express";
-import { S3 } from "aws-sdk";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import "dotenv/config";
 import mime from "mime-types";
 import { LRUCache } from "lru-cache";
@@ -7,6 +7,7 @@ import { client } from "./redis";
 import { createProxyServer } from "http-proxy";
 import http from "http";
 import https from "https";
+import { Readable } from "stream";
 
 const app = express();
 
@@ -20,17 +21,27 @@ proxy.on("error", (err, _req, res: any) => {
 });
 
 // ─── S3 / R2 client
-const s3 = new S3({
-  accessKeyId: process.env.R2_ACCESS_KEY_ID,
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  endpoint: process.env.R2_ENDPOINT,
+const s3 = new S3Client({
   region: "auto",
-  signatureVersion: "v4",
-  httpOptions: {
-    // Reuse TCP connections to R2 — avoids TLS handshake on every fetch
-    agent: new https.Agent({ keepAlive: true, maxSockets: 32 }),
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+  },
+  endpoint: process.env.R2_ENDPOINT,
+  // Node.js v3 client uses standard agents or undici. For simplicity and performance:
+  // @ts-ignore
+  requestHandler: {
+    httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 32 }),
   },
 });
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: any[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 // ─── In-process caches (avoids hitting remote Redis on every request)
 
@@ -106,11 +117,14 @@ app.use(async (req, res) => {
     }
 
     // 2) Fetch from R2 (TCP connection reused via keep-alive agent)
-    const object = await s3
-      .getObject({ Bucket: "devdep", Key: key })
-      .promise();
+    const command = new GetObjectCommand({ Bucket: "devdep", Key: key });
+    const response = await s3.send(command);
 
-    const body = object.Body as Buffer;
+    if (!response.Body) {
+      throw new Error("Empty response body from R2");
+    }
+
+    const body = await streamToBuffer(response.Body as Readable);
     fileCache.set(key, body);
 
     const contentType = mime.lookup(filePath) || "application/octet-stream";

@@ -1,6 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { s3 } from "@repo/aws";
+import { GetObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
+import { Upload } from "@aws-sdk/lib-storage";
+
+// Helper to convert stream to stream that can be piped (or just return the stream)
+// In v3, response.Body is a Readable Stream in Node.js
 
 // output/asdasd
 export async function downloadS3Folder(prefix: string): Promise<void> {
@@ -12,10 +18,12 @@ export async function downloadS3Folder(prefix: string): Promise<void> {
 
         console.log(`📥 Listing objects in S3 with prefix: ${prefix}...`);
 
-        const allFiles = await s3.listObjectsV2({
+        const command = new ListObjectsV2Command({
             Bucket: "devdep",
             Prefix: prefix
-        }).promise();
+        });
+
+        const allFiles = await s3.send(command);
 
         if (!allFiles.Contents || allFiles.Contents.length === 0) {
             console.warn(`⚠️ No files found in S3 with prefix: ${prefix}`);
@@ -25,42 +33,44 @@ export async function downloadS3Folder(prefix: string): Promise<void> {
         console.log(`📦 Found ${allFiles.Contents.length} file(s) to download`);
 
         const allPromises = allFiles.Contents.map(async ({ Key }) => {
-            return new Promise<void>((resolve, reject) => {
-                try {
-                    if (!Key) {
-                        resolve();
-                        return;
-                    }
+            if (!Key) return;
 
-                    const finalOutputPath = path.join(__dirname, Key);
-                    const dirName = path.dirname(finalOutputPath);
+            try {
+                const finalOutputPath = path.join(__dirname, Key);
+                const dirName = path.dirname(finalOutputPath);
 
-                    // Create directory if it doesn't exist
-                    if (!fs.existsSync(dirName)) {
-                        fs.mkdirSync(dirName, { recursive: true });
-                    }
-
-                    const outputFile = fs.createWriteStream(finalOutputPath);
-
-                    s3.getObject({
-                        Bucket: "devdep",
-                        Key
-                    })
-                        .createReadStream()
-                        .pipe(outputFile)
-                        .on("finish", () => {
-                            console.log(`✅ Downloaded: ${Key}`);
-                            resolve();
-                        })
-                        .on("error", (error) => {
-                            console.error(`❌ Error downloading ${Key}:`, error.message);
-                            reject(new Error(`Failed to download ${Key}: ${error.message}`));
-                        });
-                } catch (error: any) {
-                    console.error(`❌ Error processing file ${Key}:`, error?.message || error);
-                    reject(error);
+                // Create directory if it doesn't exist
+                if (!fs.existsSync(dirName)) {
+                    fs.mkdirSync(dirName, { recursive: true });
                 }
-            });
+
+                const outputFile = fs.createWriteStream(finalOutputPath);
+
+                const getObjectCommand = new GetObjectCommand({
+                    Bucket: "devdep",
+                    Key
+                });
+
+                const response = await s3.send(getObjectCommand);
+
+                if (response.Body) {
+                    const stream = response.Body as Readable;
+                    await new Promise<void>((resolve, reject) => {
+                        stream.pipe(outputFile)
+                            .on("finish", () => {
+                                console.log(`✅ Downloaded: ${Key}`);
+                                resolve();
+                            })
+                            .on("error", (error) => {
+                                console.error(`❌ Error downloading ${Key}:`, error.message);
+                                reject(new Error(`Failed to download ${Key}: ${error.message}`));
+                            });
+                    });
+                }
+            } catch (error: any) {
+                console.error(`❌ Error processing file ${Key}:`, error?.message || error);
+                throw error;
+            }
         });
 
         console.log("⏳ Downloading files...");
@@ -162,12 +172,17 @@ const uploadFile = async (fileName: string, localFilePath: string): Promise<void
             throw new Error(`Local file does not exist: ${localFilePath}`);
         }
 
-        const fileContent = fs.readFileSync(localFilePath);
-        await s3.upload({
-            Body: fileContent,
-            Bucket: "devdep",
-            Key: fileName,
-        }).promise();
+        const fileContent = fs.createReadStream(localFilePath);
+        const upload = new Upload({
+            client: s3,
+            params: {
+                Bucket: "devdep",
+                Key: fileName,
+                Body: fileContent,
+            },
+        });
+
+        await upload.done();
 
         console.log(`✅ Uploaded file: ${fileName}`);
     } catch (error: any) {
@@ -186,11 +201,13 @@ export async function deleteS3Folder(id: string): Promise<void> {
         const prefix = `dist/${id}/`;
         console.log(`🗑️ Deleting S3 objects with prefix: ${prefix}...`);
 
-        // List all objects with the prefix
-        const listResponse = await s3.listObjectsV2({
+        const listCommand = new ListObjectsV2Command({
             Bucket: "devdep",
             Prefix: prefix
-        }).promise();
+        });
+
+        // List all objects with the prefix
+        const listResponse = await s3.send(listCommand);
 
         if (!listResponse.Contents || listResponse.Contents.length === 0) {
             console.log(`ℹ️ No files found in S3 with prefix: ${prefix}`);
@@ -202,14 +219,16 @@ export async function deleteS3Folder(id: string): Promise<void> {
         // Prepare objects for deletion
         const objectsToDelete = listResponse.Contents.map(({ Key }) => ({ Key: Key! }));
 
-        // Delete objects in batch (S3 supports up to 1000 objects per request)
-        const deleteResponse = await s3.deleteObjects({
+        const deleteCommand = new DeleteObjectsCommand({
             Bucket: "devdep",
             Delete: {
                 Objects: objectsToDelete,
                 Quiet: false
             }
-        }).promise();
+        });
+
+        // Delete objects in batch (S3 supports up to 1000 objects per request)
+        const deleteResponse = await s3.send(deleteCommand);
 
         console.log(`✅ Successfully deleted ${deleteResponse.Deleted?.length || 0} file(s) from S3`);
 
