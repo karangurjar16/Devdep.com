@@ -165,6 +165,7 @@ export default function NewProject() {
                   <SelectItem value="Next.js">Next.js</SelectItem>
                   <SelectItem value="React">React</SelectItem>
                   <SelectItem value="Node">Node</SelectItem>
+                  <SelectItem value="Static">Static (HTML/CSS/JS)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

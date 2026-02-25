@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { copyFinalDist } from './config/aws';
+import { copyFinalDist, deployStaticSite } from './config/aws';
 import { client } from "@repo/redis"
 import { buildProject, publishLog } from './utils';
 import { pool } from './config/db';
@@ -131,6 +131,17 @@ async function main() {
                         const result = await deployNextProject(id, projectPath, validProject);
                         console.log(`✅ Next.js deployment completed. Port: ${result.port}`);
                         await client.set(`${id}:Port`, result.port);
+                    } else if (validProject.framework === "Static") {
+                        console.log(`📄 Static site detected, uploading files to S3...`);
+                        await client.set(`${id}:status`, "Deploying");
+                        await publishLog(id, "Deploying", "Uploading static files to S3...");
+                        await deployStaticSite(id, projectPath);
+                        await publishLog(id, "Deploying", "Static files uploaded successfully.");
+
+                        console.log(`🧹 Cleaning up static site files for ID: ${id}`);
+                        await publishLog(id, "Deploying", "Cleaning up local files...");
+                        fs.rmSync(baseDir, { recursive: true, force: true });
+                        await publishLog(id, "Deploying", "Cleanup completed");
                     } else {
                         throw new Error(`Unsupported framework: ${validProject.framework}`);
                     }

@@ -240,3 +240,48 @@ export async function deleteS3Folder(id: string): Promise<void> {
         throw new Error(`Failed to delete S3 folder: ${error?.message || 'Unknown error'}`);
     }
 }
+
+export async function deployStaticSite(id: string, projectPath: string): Promise<void> {
+    try {
+        if (!id || typeof id !== 'string' || id.trim().length === 0) {
+            throw new Error("Invalid deployment ID provided");
+        }
+        if (!projectPath || typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+            throw new Error("Invalid project path provided");
+        }
+
+        const indexPath = path.join(projectPath, 'index.html');
+        if (!fs.existsSync(indexPath)) {
+            throw new Error(`No index.html found at root of project: ${projectPath}`);
+        }
+
+        console.log(`📄 Uploading static site files for ID: ${id} from: ${projectPath}`);
+
+        const allFiles = getAllFiles(projectPath);
+
+        // Filter out .git internals
+        const filteredFiles = allFiles.filter(f => !f.includes(path.sep + '.git' + path.sep) && !f.endsWith(path.sep + '.git'));
+
+        if (filteredFiles.length === 0) {
+            console.warn(`⚠️ No files found to upload for static site: ${projectPath}`);
+            return;
+        }
+
+        console.log(`📦 Uploading ${filteredFiles.length} file(s) to S3...`);
+
+        const uploadPromises = filteredFiles.map(async (file) => {
+            const relativePath = path
+                .relative(projectPath, file)
+                .split(path.sep)
+                .join("/");
+            const s3Key = `dist/${id}/${relativePath}`;
+            await uploadFile(s3Key, file);
+        });
+
+        await Promise.all(uploadPromises);
+        console.log(`✅ Static site uploaded successfully for ID: ${id}`);
+    } catch (error: any) {
+        console.error(`❌ Error deploying static site: ${error?.message || error}`);
+        throw new Error(`Failed to deploy static site: ${error?.message || 'Unknown error'}`);
+    }
+}

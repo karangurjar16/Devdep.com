@@ -113,8 +113,8 @@ router.delete("/deploy/:id", async (req, res) => {
         console.log(`[delete:${id}] Project found, framework: ${project.framework}`);
 
         // Handle cleanup based on framework type
-        if (project.framework === "React") {
-            console.log(`[delete:${id}] Deleting S3 files for React project...`);
+        if (project.framework === "React" || project.framework === "Static") {
+            console.log(`[delete:${id}] Deleting S3 files for ${project.framework} project...`);
             try {
                 await deleteS3Folder(id);
                 console.log(`[delete:${id}] S3 cleanup completed successfully`);
